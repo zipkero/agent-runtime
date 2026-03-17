@@ -13,7 +13,7 @@ type Config struct {
 	PostgresURL  string
 }
 
-// Load는 .env 파일을 읽어 환경변수를 설정하고 Config를 반환한다.
+// Load 는 .env 파일을 읽어 환경변수를 설정하고 Config를 반환한다.
 // 필수 환경변수가 없으면 즉시 에러를 반환한다.
 func Load() (*Config, error) {
 	_ = godotenv.Load() // .env 파일이 없으면 무시 (환경변수가 이미 설정된 경우 대비)
