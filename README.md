@@ -130,12 +130,12 @@ Phase 9  문서화 / 포트폴리오
 
 ### Step 0-1. LLM Provider 확정
 
-- [ ] **Task 0-1-1. LLMClient 인터페이스 정의**
+- [x] **Task 0-1-1. LLMClient 인터페이스 정의**
   - **무엇**: `LLMClient` 인터페이스 파일 1개 작성
   - **왜**: provider를 고정하기 전에 추상화 경계를 먼저 정의해야 이후 planner 설계 시 구현 의존이 없음
   - **산출물**: `internal/llm/client.go`
 
-- [ ] **Task 0-1-2. CompletionRequest / CompletionResponse 타입 정의**
+- [x] **Task 0-1-2. CompletionRequest / CompletionResponse 타입 정의**
   - **무엇**: LLM 요청/응답 구조체 정의
   - **왜**: 인터페이스만으로는 호출부를 작성할 수 없음. 타입이 확정되어야 stub 구현이 가능함
   - **산출물**: `internal/llm/types.go`
@@ -152,7 +152,7 @@ Phase 9  문서화 / 포트폴리오
   - **왜**: 실제 `.env`를 레포에 올리지 않으면서 필요한 키 목록을 공유
   - **산출물**: `.env.example`
 
-- [ ] **Task 0-2-3. 환경변수 로딩 코드 작성**
+- [x] **Task 0-2-3. 환경변수 로딩 코드 작성**
   - **무엇**: 앱 시작 시 `.env`를 읽고 누락 변수가 있으면 즉시 에러를 내는 config 패키지
   - **왜**: 환경변수가 없을 때 런타임 중간에 터지는 것을 방지
   - **산출물**: `internal/config/config.go`
