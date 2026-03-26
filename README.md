@@ -275,6 +275,13 @@ Phase 10 문서화 / 포트폴리오
   - **왜**: planner 교체 시에도 loop가 동작하는지 검증. 이 테스트가 없으면 Phase 3에서 LLM planner로 교체 시 회귀 확인 불가
   - **산출물**: `internal/agent/runtime_test.go`
 
+### Phase 1 Exit Criteria
+
+- MockPlanner + MockExecutor 조합으로 `tool_call → finish` 흐름 동작 확인
+- max step 초과 시 loop 종료 확인
+- AgentState에 StepCount 누적 및 Status 전이(`running` → `finished`/`failed`) 확인
+- `go test ./internal/agent/...` 통과
+
 ---
 
 ## Phase 2 — Tool Registry + Tool Router
@@ -349,6 +356,20 @@ Phase 10 문서화 / 포트폴리오
   - **왜**: 이 로그가 없으면 Phase 3~6에서 LLM이 어떤 tool을 선택했는지 추적 불가능
   - **산출물**: router 또는 executor 내 로그 출력 코드
 
+### Step 2-6. 에러 타입 분류
+
+- [ ] **Task 2-6-1. AgentError 타입 정의**
+  - **무엇**: `retryable`/`fatal` 구분과 `tool_not_found`, `input_validation_failed`, `tool_execution_failed`, `llm_parse_error` 서브타입을 갖는 에러 타입 정의
+  - **왜**: Phase 2 ToolRouter에서 이미 에러 유형을 다르게 처리하고 있음. 상수화된 타입이 없으면 Phase 5 retry 정책에서 "어떤 에러에 재시도할지" 판단 기준이 없음. `tool_not_found`는 fatal, `tool_execution_failed`는 retryable 같은 구분이 이 시점에 고정되어야 함
+  - **산출물**: `internal/agent/errors.go`
+
+### Phase 2 Exit Criteria
+
+- 미등록 tool 호출 시 `tool_not_found` 에러 반환 확인
+- input validation 실패 시 `input_validation_failed` 에러 반환 확인
+- `retryable` vs `fatal` 에러 구분 확인
+- tool 실행 로그 출력 확인 (request_id, tool_name, duration, error 여부)
+
 ---
 
 ## Phase 3 — Planner 고도화 / LLM 연결
@@ -411,27 +432,12 @@ Phase 10 문서화 / 포트폴리오
   - **왜**: LLM 연결 이후 소급 추적 불가능하므로 이 시점에 반드시 시작해야 함
   - **산출물**: `openai_client.go` 또는 `llm_planner.go` 수정
 
-### Step 3-5. Reflection
+### Phase 3 Exit Criteria
 
-- [ ] **Task 3-5-1. ReflectResult 타입 정의**
-  - **무엇**: `Sufficient bool`, `MissingConditions []string`, `Suggestion string` 필드를 갖는 struct
-  - **왜**: Reflector 인터페이스 시그니처의 반환 타입
-  - **산출물**: `internal/planner/reflect_result.go`
-
-- [ ] **Task 3-5-2. Reflector 인터페이스 정의**
-  - **무엇**: `Reflect(ctx, AgentState) (ReflectResult, error)` 인터페이스
-  - **왜**: reflection이 loop에 하드코딩되지 않도록 인터페이스로 분리
-  - **산출물**: `internal/planner/reflector.go`
-
-- [ ] **Task 3-5-3. LLMReflector 구현**
-  - **무엇**: reflection 전용 prompt를 사용해 LLM을 호출하고 ReflectResult를 반환하는 구현체
-  - **왜**: planner와 동일한 LLMClient를 재사용하되 prompt가 달라야 함
-  - **산출물**: `internal/planner/llm_reflector.go`
-
-- [ ] **Task 3-5-4. Reflection 결과를 AgentState에 반영**
-  - **무엇**: `Sufficient=false`일 때 loop가 추가 단계를 진행하도록 Runtime.Run()에 연결
-  - **왜**: reflection이 state에 반영되지 않으면 loop 제어에 아무 영향도 주지 않음
-  - **산출물**: `internal/agent/runtime.go` 수정
+- LLMPlanner가 OpenAI API 호출 후 유효한 PlanResult 반환 확인
+- invalid JSON 응답 시 1회 재시도 후 에러 처리 확인
+- hallucinated tool name 방어 (registry에 없는 tool 이름 → 에러) 확인
+- TokenUsage 로그 출력 확인 (request_id, prompt_tokens, completion_tokens)
 
 ---
 
@@ -481,13 +487,13 @@ Phase 10 문서화 / 포트폴리오
   - **산출물**: `internal/memory/memory.go`
 
 - [ ] **Task 4-4-2. MemoryRepository 인터페이스 정의**
-  - **무엇**: `Save(ctx, Memory) error`, `LoadRelevant(ctx, query) ([]Memory, error)` 인터페이스
-  - **왜**: Postgres 의존을 런타임 코드에서 격리. 테스트 시 in-memory로 교체 가능
+  - **무엇**: `Save(ctx, Memory) error`, `LoadByTags(ctx, tags []string, limit int) ([]Memory, error)` 인터페이스
+  - **왜**: Postgres 의존을 런타임 코드에서 격리. 테스트 시 in-memory로 교체 가능. 조회 방식을 태그+limit으로 고정해야 나중에 embedding 검색으로 교체할 때 인터페이스 변경 범위가 명확해짐
   - **산출물**: `internal/memory/memory_repository.go`
 
 - [ ] **Task 4-4-3. PostgresMemoryRepository 구현**
-  - **무엇**: Postgres에 Memory를 저장하고 태그 기반으로 조회하는 구현체
-  - **왜**: 장기 기억이 영구 저장소에 없으면 프로세스 재시작마다 소실됨
+  - **무엇**: Postgres에 Memory를 저장하고 `LoadByTags`를 태그 배열 AND 조건 + LIMIT으로 구현하는 구현체
+  - **왜**: 장기 기억이 영구 저장소에 없으면 프로세스 재시작마다 소실됨. embedding 검색은 Phase 9 이후 선택 도입
   - **산출물**: `internal/memory/postgres_memory_repository.go`
 
 ### Step 4-5. Memory Manager
@@ -501,6 +507,13 @@ Phase 10 문서화 / 포트폴리오
   - **무엇**: SessionRepository + MemoryRepository를 주입받아 MemoryManager 인터페이스를 구현하는 구조체
   - **왜**: runtime은 MemoryManager만 알면 되고 구체 저장소는 주입으로 교체 가능
   - **산출물**: `internal/memory/default_memory_manager.go`
+
+### Phase 4 Exit Criteria
+
+- 동일 SessionID로 재요청 시 이전 RecentContext 복원 확인
+- RequestState / SessionState / WorkingMemory 데이터가 서로 독립적으로 분리 확인
+- Redis 재시작 후 세션 복원 확인 (RedisSessionRepository)
+- Memory 저장 후 태그 기반 조회 결과 확인
 
 ---
 
@@ -554,6 +567,37 @@ Phase 10 문서화 / 포트폴리오
   - **왜**: 분기가 여러 곳에 흩어지면 새로운 실패 유형 추가 시 누락이 발생함
   - **산출물**: `internal/agent/failure_handler.go`
 
+### Step 5-5. Reflection
+
+> Verifier와 RetryPolicy가 안정화된 이후 도입. Reflection은 "verifier 판단 전 LLM 자기검증" 역할로, Verifier와 함께 있어야 상호 역할이 명확해진다.
+
+- [ ] **Task 5-5-1. ReflectResult 타입 정의**
+  - **무엇**: `Sufficient bool`, `MissingConditions []string`, `Suggestion string` 필드를 갖는 struct
+  - **왜**: Reflector 인터페이스 시그니처의 반환 타입
+  - **산출물**: `internal/planner/reflect_result.go`
+
+- [ ] **Task 5-5-2. Reflector 인터페이스 정의**
+  - **무엇**: `Reflect(ctx, AgentState) (ReflectResult, error)` 인터페이스
+  - **왜**: reflection이 loop에 하드코딩되지 않도록 인터페이스로 분리
+  - **산출물**: `internal/planner/reflector.go`
+
+- [ ] **Task 5-5-3. LLMReflector 구현**
+  - **무엇**: reflection 전용 prompt를 사용해 LLM을 호출하고 ReflectResult를 반환하는 구현체
+  - **왜**: planner와 동일한 LLMClient를 재사용하되 prompt가 달라야 함
+  - **산출물**: `internal/planner/llm_reflector.go`
+
+- [ ] **Task 5-5-4. Reflection 결과를 AgentState에 반영**
+  - **무엇**: `Sufficient=false`일 때 loop가 추가 단계를 진행하도록 Runtime.Run()에 연결
+  - **왜**: reflection이 state에 반영되지 않으면 loop 제어에 아무 영향도 주지 않음
+  - **산출물**: `internal/agent/runtime.go` 수정
+
+### Phase 5 Exit Criteria
+
+- SimpleVerifier가 `done` / `retry` / `fail` 올바르게 분기 확인
+- RetryPolicy max 횟수 초과 시 loop 종료 확인
+- `tool_not_found` 에러 → fatal, `tool_execution_failed` 에러 → retry 분기 확인
+- `Sufficient=false` reflection 결과 시 loop 추가 진행 확인
+
 ---
 
 ## Phase 6 — Test Harness Engineering
@@ -588,6 +632,13 @@ Phase 10 문서화 / 포트폴리오
   - **무엇**: Phase 1에서 작성한 `tool_call → finish`, `max step 초과` 케이스를 AgentHarness + Scenario 타입으로 이관
   - **왜**: 하네스 자체가 동작하는지 기존 케이스로 검증하고, 이후 Phase 7 multi-agent 테스트의 패턴을 확립
   - **산출물**: `testharness/harness_test.go`, `internal/agent/runtime_test.go` 정리
+
+### Phase 6 Exit Criteria
+
+- AgentHarness에 Scenario 하나 추가만으로 새 E2E 테스트 케이스 실행 가능 확인
+- Phase 1 runtime 테스트가 하네스 기반으로 동일하게 통과 확인
+- `AssertToolCalled`, `AssertPlannerCalledTimes` 등 assert 헬퍼로 결과 검증 가능 확인
+- `go test ./testharness/...` 통과
 
 ---
 
@@ -750,12 +801,12 @@ Phase 10 문서화 / 포트폴리오
   - **왜**: latency 병목이 어느 컴포넌트에 있는지 trace 없이는 측정 불가
   - **산출물**: 각 컴포넌트에 OTel span 추가
 
-### Step 9-4. 에러 분류 체계
+### Step 9-4. 에러 분류 체계 고도화
 
-- [ ] **Task 9-4-1. 에러 타입 분류 정의**
-  - **무엇**: `user_error`, `system_error`, `provider_error`, `tool_error`, `retryable_error`, `fatal_error` 분류
-  - **왜**: 분류 없이는 알림, retry, 사용자 응답 메시지를 유형별로 다르게 처리할 수 없음
-  - **산출물**: `internal/agent/error_types.go`
+- [ ] **Task 9-4-1. 에러 타입 분류 확장**
+  - **무엇**: Phase 2에서 정의한 기본 에러 타입에 `user_error`, `system_error`, `provider_error` 분류 추가
+  - **왜**: 기본 retryable/fatal 구분은 Phase 2에서 정의됨. 이 단계에서는 알림, 사용자 응답 메시지, 모니터링 레이블에 사용할 운영 관점의 분류를 추가하는 것이 목적
+  - **산출물**: `internal/agent/errors.go` 확장
 
 ### Step 9-5. Policy Layer
 
