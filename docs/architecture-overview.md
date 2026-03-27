@@ -144,3 +144,33 @@ Phase 8  Timeout + CostPolicy + Observability + PolicyLayer
 
 각 Phase는 이전 Phase의 컴포넌트를 교체하거나 확장하는 방식으로 진행된다.
 핵심 loop(`internal/agent/runtime.go`)는 Phase 1에 확정되고, 이후엔 부품만 교체된다.
+
+---
+
+## 설계 결정 사항
+
+### AgentState.CurrentPlan 미포함 (Phase 1)
+
+`AgentState`에 `CurrentPlan PlanResult` 필드를 넣으면 패키지 순환 참조가 발생한다.
+
+```
+state  → planner (CurrentPlan 타입 때문에)
+planner → state  (Planner.Plan 인자 타입 때문에)
+```
+
+**Phase 1 선택: PlanResult를 Runtime 지역변수로만 처리**
+
+`PlanResult`는 `planner.Plan()` 호출 직후 `executor.Execute()`로 넘기면 충분하다.
+loop 내에서 소비되고 사라지므로 state에 저장할 필요가 없다.
+
+**Phase 3 예정: `internal/types` 패키지로 분리**
+
+LLMPlanner가 도입되면 "이전 step에서 무엇을 결정했는지"를 Planner가 참고해야 한다.
+그 시점에 `PlanResult`를 `internal/types`로 이동하면 순환 없이 `AgentState`에 포함 가능하다.
+
+```
+internal/types   ← PlanResult, ToolResult 등 공유 타입
+internal/state   → types
+internal/planner → types, state
+internal/executor → types, state
+```
