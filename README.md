@@ -209,53 +209,58 @@ Phase 10 문서화 / 포트폴리오
 
 ### Step 1-2. AgentState 구조
 
-- [ ] **Task 1-2-1. AgentStatus 타입 정의**
+- [x] **Task 1-2-1. AgentStatus 타입 정의**
   - **무엇**: `running`, `finished`, `failed` 등 상태 열거형 정의
   - **왜**: `AgentState.Status` 필드 타입이 먼저 있어야 `AgentState` struct를 완성할 수 있음
   - **산출물**: `internal/state/status.go`
 
-- [ ] **Task 1-2-2. ToolResult 타입 정의**
+- [x] **Task 1-2-2. ToolResult 타입 정의**
   - **무엇**: tool 실행 결과를 담는 구조체 정의
   - **왜**: `AgentState.ToolResults`의 원소 타입이 필요하고, Phase 2 Tool 인터페이스와도 공유됨
   - **산출물**: `internal/state/tool_result.go`
 
-- [ ] **Task 1-2-3. AgentState struct 정의**
-  - **무엇**: `AgentState` struct — RequestID, SessionID, UserInput, CurrentPlan, LastToolCall, ToolResults, FinalAnswer, StepCount, Status
+- [x] **Task 1-2-3. AgentState struct 정의**
+  - **무엇**: `AgentState` struct — RequestID, SessionID, UserInput, LastToolCall, ToolResults, FinalAnswer, StepCount, Status
   - **왜**: loop의 모든 컴포넌트가 이 구조체를 통해 상태를 주고받음. 이것이 없으면 planner/executor 인터페이스 시그니처를 확정할 수 없음
+  - **비고**: `CurrentPlan` 필드 제외 — 순환 참조 방지 (Phase 3에서 `internal/types`로 해결 예정, `docs/architecture-overview.md` 참고)
   - **산출물**: `internal/state/agent_state.go`
 
 ### Step 1-3. Planner 인터페이스
 
-- [ ] **Task 1-3-1. ActionType 상수 정의**
+- [x] **Task 1-3-1. ActionType 상수 정의**
   - **무엇**: `tool_call`, `respond_directly`, `finish` 3개 상수
   - **왜**: PlanResult 타입 정의에 앞서 ActionType이 먼저 있어야 함
   - **산출물**: `internal/planner/action_type.go`
 
-- [ ] **Task 1-3-2. PlanResult 타입 정의**
+- [x] **Task 1-3-2. PlanResult 타입 정의**
   - **무엇**: action type, selected tool name, tool input, reasoning summary 필드를 갖는 struct
   - **왜**: Planner 인터페이스 시그니처의 반환 타입
   - **산출물**: `internal/planner/plan_result.go`
 
-- [ ] **Task 1-3-3. Planner 인터페이스 정의**
+- [x] **Task 1-3-3. Planner 인터페이스 정의**
   - **무엇**: `Plan(ctx, AgentState) (PlanResult, error)` 인터페이스
   - **왜**: loop가 planner 구현체에 의존하지 않도록 경계를 인터페이스로 정의
+  - **비고**: `AgentState`를 값으로 전달 — 읽기 전용 보장, Planner는 상태를 수정하지 않음
   - **산출물**: `internal/planner/planner.go`
 
-- [ ] **Task 1-3-4. MockPlanner 구현**
+- [x] **Task 1-3-4. MockPlanner 구현**
   - **무엇**: 고정된 PlanResult를 순서대로 반환하는 테스트용 planner
   - **왜**: LLM 없이도 loop 동작을 검증하려면 교체 가능한 구현체가 필요함
+  - **비고**: Steps 소진 시 `ActionFinish` 자동 반환 — 무한루프 방지
   - **산출물**: `internal/planner/mock_planner.go`
 
 ### Step 1-4. Executor 인터페이스
 
-- [ ] **Task 1-4-1. Executor 인터페이스 정의**
+- [x] **Task 1-4-1. Executor 인터페이스 정의**
   - **무엇**: `Execute(ctx, PlanResult) (ToolResult, error)` 인터페이스
   - **왜**: loop가 실행 구현체에 의존하지 않도록 경계를 인터페이스로 정의
+  - **비고**: `AgentState`를 받지 않음 — `PlanResult`만으로 실행에 충분, Executor는 Tool 실행 위임 역할
   - **산출물**: `internal/executor/executor.go`
 
-- [ ] **Task 1-4-2. MockExecutor 구현**
+- [x] **Task 1-4-2. MockExecutor 구현**
   - **무엇**: 고정된 ToolResult를 반환하는 테스트용 executor
   - **왜**: Phase 2 Tool Registry 없이도 loop 단위 테스트가 가능해야 함
+  - **비고**: Results 소진 시 빈 ToolResult 반환 — 종료 결정은 Planner 역할이므로 Executor는 관여하지 않음
   - **산출물**: `internal/executor/mock_executor.go`
 
 ### Step 1-5. Finish 조건 + Runtime Loop
