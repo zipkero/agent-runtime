@@ -149,7 +149,7 @@ Phase별 상세 Task와 진행 상황을 추적한다.
   - **비고**: `IsFinished(plan, state, maxStep) FinishResult` — 종료 여부와 이유를 함께 반환. Runtime이 이 결과로 Status 전이를 결정함
   - **산출물**: `internal/agent/finish.go`
 
-- [ ] **Task 1-5-2. Runtime.Run() 루프 구현**
+- [x] **Task 1-5-2. Runtime.Run() 루프 구현**
   - **무엇**: `plan → execute → state 반영 → finish 판단`을 반복하는 메인 루프
   - **왜**: 이것이 전체 커리큘럼의 핵심 골격. 이후 모든 Phase는 이 루프의 부품을 교체하거나 확장하는 것
   - **산출물**: `internal/agent/runtime.go`
