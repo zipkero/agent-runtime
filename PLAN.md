@@ -189,7 +189,7 @@ Phase별 상세 Task와 진행 상황을 추적한다.
   - **왜**: router가 registry 구현에 의존하지 않도록 경계를 인터페이스로 먼저 정의
   - **산출물**: `internal/tools/registry.go`
 
-- [ ] **Task 2-2-2. InMemoryToolRegistry 구현**
+- [x] **Task 2-2-2. InMemoryToolRegistry 구현**
   - **무엇**: map 기반 ToolRegistry 구현체, 미등록 tool 조회 시 명확한 에러 반환
   - **왜**: 실제 동작하는 registry가 있어야 tool을 등록하고 router가 조회할 수 있음
   - **산출물**: `internal/tools/in_memory_registry.go`
