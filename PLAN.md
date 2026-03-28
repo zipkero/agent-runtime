@@ -184,7 +184,7 @@ Phase별 상세 Task와 진행 상황을 추적한다.
 
 ### Step 2-2. Tool Registry
 
-- [ ] **Task 2-2-1. ToolRegistry 인터페이스 정의**
+- [x] **Task 2-2-1. ToolRegistry 인터페이스 정의**
   - **무엇**: `Register(Tool)`, `Get(name) (Tool, error)`, `List() []Tool` 인터페이스
   - **왜**: router가 registry 구현에 의존하지 않도록 경계를 인터페이스로 먼저 정의
   - **산출물**: `internal/tools/registry.go`
