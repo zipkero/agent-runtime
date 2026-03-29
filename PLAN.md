@@ -194,7 +194,7 @@ Phase별 상세 Task와 진행 상황을 추적한다.
   - **왜**: 실제 동작하는 registry가 있어야 tool을 등록하고 router가 조회할 수 있음
   - **산출물**: `internal/tools/in_memory_registry.go`
 
-- [ ] **Task 2-2-3. calculator tool 구현**
+- [x] **Task 2-2-3. calculator tool 구현**
   - **무엇**: 수식 문자열을 받아 계산 결과를 반환하는 tool
   - **왜**: 외부 API 의존 없이 tool 인터페이스와 registry를 검증할 수 있는 가장 단순한 tool
   - **산출물**: `internal/tools/calculator/calculator.go`
