@@ -235,7 +235,7 @@ Phase별 상세 Task와 진행 상황을 추적한다.
 
 ### Step 2-5. Tool 실행 로그
 
-- [ ] **Task 2-5-1. Tool 실행 로그 구현**
+- [x] **Task 2-5-1. Tool 실행 로그 구현**
   - **무엇**: request id, session id, tool name, input, output summary, duration, error 여부를 구조화된 로그로 출력
   - **왜**: 이 로그가 없으면 Phase 3~6에서 LLM이 어떤 tool을 선택했는지 추적 불가능
   - **산출물**: router 또는 executor 내 로그 출력 코드
