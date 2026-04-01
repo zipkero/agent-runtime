@@ -205,9 +205,11 @@ AgentError {
 | Kind | Retryable | 이유 |
 |------|-----------|------|
 | `tool_not_found` | false | tool 이름이 잘못된 것이므로 재시도해도 동일 결과 |
-| `input_validation_failed` | false | 입력 구조 자체가 잘못됨 |
+| `input_validation_failed` | false | 외부 시스템 또는 사용자가 보낸 입력 구조 자체가 잘못됨 — 재시도로 해결 불가 |
+| `llm_parse_error` | true | LLM이 잘못된 JSON 또는 존재하지 않는 tool 이름을 반환한 경우 — 재요청하면 달라질 수 있음. LLM이 생성한 input이 schema와 맞지 않는 경우도 이 Kind로 분류 |
 | `tool_execution_failed` | true | 일시적 오류(네트워크, 타임아웃 등) 가능성 있음 |
-| `llm_parse_error` | true | LLM에게 다시 요청하면 달라질 수 있음 |
+
+> `input_validation_failed`와 `llm_parse_error`의 구분: LLM output 파싱/검증 단계에서 발생한 오류는 `llm_parse_error`(retryable), 외부 입력 검증 단계에서 발생한 오류는 `input_validation_failed`(fatal).
 
 Phase 5에서 RetryPolicy가 `Retryable` 필드를 기준으로 재시도 여부를 결정한다.
 
@@ -255,9 +257,10 @@ Phase 2  Tool + ToolRegistry + ToolRouter + 구체 Tool 구현 + AgentError
 Phase 3  LLMClient + LLMPlanner + ToolExecutor (ToolRouter 실제 연결)
 Phase 4  SessionState + WorkingMemory + LongTermMemory + MemoryManager
 Phase 5  Verifier + RetryPolicy + FailureHandler
-Phase 6  Task + Workflow + ManagerAgent + WorkerAgent
-Phase 7  HTTP API + AsyncTaskQueue + Worker
-Phase 8  Timeout + CostPolicy + Observability + PolicyLayer
+Phase 6  Test Harness (MockLLMClient + AgentHarness + Scenario)
+Phase 7  Task + Workflow + ManagerAgent + WorkerAgent
+Phase 8  HTTP API + AsyncTaskQueue + Worker
+Phase 9  Timeout + CostPolicy + Observability + PolicyLayer
 ```
 
 각 Phase는 이전 Phase의 컴포넌트를 교체하거나 확장하는 방식으로 진행된다.

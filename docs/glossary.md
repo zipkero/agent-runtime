@@ -143,6 +143,6 @@ Runtime Loop의 단일 반복(iteration).
 
 Task들의 의존성 그래프.
 독립적인 Task는 병렬로 실행하고, 의존 관계가 있는 Task는 순서를 지켜 실행한다.
-Phase 6 ManagerAgent가 이 Workflow를 해석하고 실행 순서를 결정한다.
+Phase 7 ManagerAgent가 이 Workflow를 해석하고 실행 순서를 결정한다.
 
 > 코드 위치: `internal/orchestration/`
