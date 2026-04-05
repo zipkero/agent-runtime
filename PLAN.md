@@ -294,7 +294,7 @@ Phase별 상세 Task와 진행 상황을 추적한다.
 
 ### Step 3-0. Phase 3 사전 준비
 
-- [ ] **Task 3-0-1. AgentState에 CurrentPlan 필드 추가**
+- [x] **Task 3-0-1. AgentState에 CurrentPlan 필드 추가**
   - **무엇**: `internal/state/agent_state.go`에 `CurrentPlan types.PlanResult` 필드 추가. Phase 2 Task 2-7-1에서 `PlanResult`가 `internal/types`로 이동되어 있으므로 `state → types` 의존만 발생함(순환 없음)
   - **왜**: Phase 1 Task 1-2-3 비고에서 "순환 참조 방지를 위해 Phase 3에서 internal/types로 해결 예정"이라고 명시됐음. `AgentState.CurrentPlan`이 없으면 Runtime loop가 직전 플래닝 결과를 state에 저장하지 못하고, LLMPlanner의 prompt_builder가 "이미 시도한 action"을 system prompt에 포함할 수 없음
   - **비고**: `go build ./...` + `go test ./...` 전체 통과 확인 후 Task 3-0-2로 진행. `Runtime.Run()` loop의 `④ AgentState 반영` 단계에서 `state.CurrentPlan = plan` 대입 로직도 함께 추가

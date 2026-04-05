@@ -14,4 +14,5 @@ type AgentState struct {
 	FinalAnswer  string
 	StepCount    int
 	Status       AgentStatus
+	CurrentPlan  types.PlanResult
 }
