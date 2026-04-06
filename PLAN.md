@@ -308,7 +308,7 @@ Phase별 상세 Task와 진행 상황을 추적한다.
 
 ### Step 3-1. ActionType 확장
 
-- [ ] **Task 3-1-1. ActionType 상수 2개 추가**
+- [x] **Task 3-1-1. ActionType 상수 2개 추가**
   - **무엇**: `ask_user`, `summarize` 추가. 기존 3개는 유지
   - **왜**: LLM이 이 타입들을 선택할 수 있어야 더 현실적인 시나리오 대응 가능
   - **비고**: `retry`는 Runtime/RetryPolicy의 루프 제어 정책 (Phase 5에서 별도 구현). `search_memory`는 ActionType이 아닌 Tool로 구현 (Registry에 등록). `ask_user`는 Phase 3에서 Runtime loop가 만나면 즉시 `respond_directly`로 대체 처리(loop 종료)하며, Phase 8 HTTP API 환경에서의 비동기 사용자 입력 대기 메커니즘은 Phase 8에서 별도 설계한다
