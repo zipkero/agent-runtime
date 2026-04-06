@@ -300,7 +300,7 @@ Phase별 상세 Task와 진행 상황을 추적한다.
   - **비고**: `go build ./...` + `go test ./...` 전체 통과 확인 후 Task 3-0-2로 진행. `Runtime.Run()` loop의 `④ AgentState 반영` 단계에서 `state.CurrentPlan = plan` 대입 로직도 함께 추가
   - **산출물**: `internal/state/agent_state.go` 수정, `internal/agent/runtime.go` 수정 (CurrentPlan 대입)
 
-- [ ] **Task 3-0-2. Phase 3 LLM 연동 테스트 전략 수립**
+- [x] **Task 3-0-2. Phase 3 LLM 연동 테스트 전략 수립**
   - **무엇**: Phase 3에서 실제 OpenAI API를 호출하는 테스트 파일에 `//go:build integration` 태그 적용 규칙을 Phase 4(Task 4-0-1)보다 앞당겨 먼저 수립. `Makefile`의 기존 `make test` 타겟이 integration 테스트를 제외하도록 `-tags integration` 제외 옵션 추가
   - **왜**: Task 3-4-1(OpenAI LLMClient)과 Phase 3 Exit Criteria의 "LLMPlanner → OpenAI API 호출 end-to-end 확인"은 실제 API 키가 필요함. 이를 일반 `go test ./...` 에 포함시키면 API 키 없는 환경(CI, 다른 개발 머신)에서 즉시 실패함. Phase 4 Task 4-0-1보다 먼저 규칙을 적용해야 Phase 3 파일부터 일관성이 생김
   - **비고**: Phase 4 Task 4-0-1은 이 Task에서 수립한 규칙 위에 `make test-integration` 타겟만 추가하면 됨. GitHub Actions CI(Phase 9 Task 9-0-1)는 `make test`(unit only)만 실행
