@@ -339,7 +339,7 @@ Phase별 상세 Task와 진행 상황을 추적한다.
 
 ### Step 3-3. MockLLMClient (테스트 인프라)
 
-- [ ] **Task 3-3-1. MockLLMClient 구현**
+- [x] **Task 3-3-1. MockLLMClient 구현**
   - **무엇**: 시나리오 기반으로 LLM 응답을 순서대로 반환하는 mock. 호출 횟수 추적 포함
   - **왜**: LLMPlanner 테스트 시 실제 OpenAI API 호출 없이 응답을 제어할 수 있어야 함. 비용/속도/비결정성 문제를 피하고, 실패 케이스(invalid JSON, hallucinated tool name)를 안정적으로 재현해야 함
   - **비고**: Phase 6 Multi-Agent 테스트에서도 재사용됨
