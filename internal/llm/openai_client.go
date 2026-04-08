@@ -9,6 +9,8 @@ import (
 	"log/slog"
 	"net/http"
 	"time"
+
+	"agentflow/internal/observability"
 )
 
 const (
@@ -23,6 +25,7 @@ type OpenAIClient struct {
 	model      string
 	httpClient *http.Client
 	timeout    time.Duration
+	logger     *slog.Logger
 }
 
 // OpenAIOption 은 OpenAIClient 생성 시 선택 옵션을 지정하는 함수 타입이다.
@@ -61,6 +64,7 @@ func NewOpenAIClient(apiKey string, opts ...OpenAIOption) *OpenAIClient {
 		model:      defaultModel,
 		httpClient: &http.Client{},
 		timeout:    defaultTimeout,
+		logger:     observability.New(),
 	}
 	for _, opt := range opts {
 		opt(c)
@@ -169,8 +173,8 @@ func (c *OpenAIClient) Complete(ctx context.Context, req CompletionRequest) (Com
 		CalledAt:         calledAt,
 		RequestID:        apiResp.ID,
 	}
-	slog.Info("llm token usage",
-		"request_id", usage.RequestID,
+	observability.FromContext(ctx, c.logger).InfoContext(ctx, "llm token usage",
+		"llm_call_id", usage.RequestID,
 		"prompt_tokens", usage.PromptTokens,
 		"completion_tokens", usage.CompletionTokens,
 		"total_tokens", usage.TotalTokens,

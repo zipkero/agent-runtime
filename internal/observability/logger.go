@@ -4,8 +4,6 @@ import (
 	"context"
 	"log/slog"
 	"os"
-
-	"agentflow/internal/reqctx"
 )
 
 const (
@@ -23,13 +21,13 @@ func New() *slog.Logger {
 // populated from ctx. Fields with empty values are omitted.
 func FromContext(ctx context.Context, base *slog.Logger) *slog.Logger {
 	var attrs []slog.Attr
-	if v := reqctx.TraceIDFromCtx(ctx); v != "" {
+	if v := TraceIDFromCtx(ctx); v != "" {
 		attrs = append(attrs, slog.String(KeyTraceID, v))
 	}
-	if v := reqctx.SessionIDFromCtx(ctx); v != "" {
+	if v := SessionIDFromCtx(ctx); v != "" {
 		attrs = append(attrs, slog.String(KeySessionID, v))
 	}
-	if v := reqctx.RequestIDFromCtx(ctx); v != "" {
+	if v := RequestIDFromCtx(ctx); v != "" {
 		attrs = append(attrs, slog.String(KeyRequestID, v))
 	}
 	if len(attrs) == 0 {

@@ -40,7 +40,7 @@
 - `internal/agent` — Runtime loop + finish 조건 + retry 정책. 최상위 조율자.
 - `internal/memory` — Session + Long-term memory. 저장소를 인터페이스로 분리한다.
 - `internal/verifier` — Verifier + Reflector 인터페이스 및 구현체. `internal/agent`에 주입되며, `internal/agent`에 직접 의존하지 않는다.
-- `internal/observability` — structured logger + OTel 초기화. 다른 internal 패키지를 참조하지 않는다.
+- `internal/observability` — structured logger + context 키 관리 + OTel 초기화. 다른 internal 패키지를 참조하지 않는다. `log/slog`를 직접 사용하는 것은 이 패키지만 허용한다. 다른 패키지는 반드시 `observability.New()` / `observability.FromContext()`를 통해 logger를 사용한다.
 - `internal/orchestration` — Multi-agent 조율. `internal/agent`(Runtime)를 재사용한다(`orchestration → agent`). `internal/agent`는 `internal/orchestration`을 알지 않는다(역방향 의존 금지).
 - `internal/api` — HTTP 핸들러 + AsyncTask 타입 + 저장소 인터페이스. `internal/agent`와 `internal/queue`를 직접 알지 않는다. 핸들러는 `TaskQueue` 인터페이스와 `AsyncTaskRepository` 인터페이스만 주입받는다.
 - `internal/queue` — TaskQueue 인터페이스 + Worker. Worker는 `internal/agent`(Runtime)와 `internal/api`(AsyncTaskRepository)에 의존한다(`queue → agent`, `queue → api`).

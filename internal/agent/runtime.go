@@ -36,7 +36,7 @@ func NewRuntime(p planner.Planner, e executor.Executor, maxStep int) *Runtime {
 func (r *Runtime) Run(ctx context.Context, s state.AgentState) (state.AgentState, error) {
 	base := r.logger
 	if base == nil {
-		base = slog.Default()
+		base = observability.New()
 	}
 	log := observability.FromContext(ctx, base)
 
