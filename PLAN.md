@@ -399,7 +399,7 @@ Phase별 상세 Task와 진행 상황을 추적한다.
   - **왜**: 타입이 없으면 로그가 비정형 문자열로 흩어짐. Phase 9 비용 정책의 기반 데이터
   - **산출물**: `internal/llm/token_usage.go`
 
-- [ ] **Task 3-5-2. LLM 호출마다 TokenUsage 기록**
+- [x] **Task 3-5-2. LLM 호출마다 TokenUsage 기록**
   - **무엇**: LLMClient 또는 LLMPlanner에서 응답 수신 후 TokenUsage를 구조화된 로그로 출력
   - **왜**: LLM 연결 이후 소급 추적 불가능하므로 이 시점에 반드시 시작해야 함
   - **산출물**: `openai_client.go` 또는 `llm_planner.go` 수정

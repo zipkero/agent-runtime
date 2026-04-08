@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"time"
 )
@@ -82,6 +83,7 @@ type openAIMessage struct {
 
 // openAIResponse 는 OpenAI Chat Completions API의 응답 body 구조체다.
 type openAIResponse struct {
+	ID      string `json:"id"`
 	Choices []struct {
 		Message      openAIMessage `json:"message"`
 		FinishReason string        `json:"finish_reason"`
@@ -130,6 +132,7 @@ func (c *OpenAIClient) Complete(ctx context.Context, req CompletionRequest) (Com
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("Authorization", "Bearer "+c.apiKey)
 
+	calledAt := time.Now()
 	resp, err := c.httpClient.Do(httpReq)
 	if err != nil {
 		return CompletionResponse{}, fmt.Errorf("openai: HTTP 요청 실패: %w", err)
@@ -159,13 +162,23 @@ func (c *OpenAIClient) Complete(ctx context.Context, req CompletionRequest) (Com
 	}
 
 	choice := apiResp.Choices[0]
+	usage := TokenUsage{
+		PromptTokens:     apiResp.Usage.PromptTokens,
+		CompletionTokens: apiResp.Usage.CompletionTokens,
+		TotalTokens:      apiResp.Usage.TotalTokens,
+		CalledAt:         calledAt,
+		RequestID:        apiResp.ID,
+	}
+	slog.Info("llm token usage",
+		"request_id", usage.RequestID,
+		"prompt_tokens", usage.PromptTokens,
+		"completion_tokens", usage.CompletionTokens,
+		"total_tokens", usage.TotalTokens,
+		"called_at", usage.CalledAt.Format(time.RFC3339),
+	)
 	return CompletionResponse{
 		Content:      choice.Message.Content,
 		FinishReason: choice.FinishReason,
-		Usage: TokenUsage{
-			PromptTokens:     apiResp.Usage.PromptTokens,
-			CompletionTokens: apiResp.Usage.CompletionTokens,
-			TotalTokens:      apiResp.Usage.TotalTokens,
-		},
+		Usage:        usage,
 	}, nil
 }
