@@ -372,16 +372,24 @@ Phase별 상세 Task와 진행 상황을 추적한다.
 - [x] **Task 3-4-5. invalid JSON 재시도 로직 구현**
   - **무엇**: JSON 파싱 실패 시 LLM 재호출 1회 후 에러 반환
   - **왜**: LLM은 간헐적으로 형식 오류를 낼 수 있음. 1회 재시도로 대부분 해결되지만 무한 루프는 금지
-  - **산출물**: `LLMPlanner.parseResult()` 내부 또는 별도 retry 함수
+  - **구현**: `LLMPlanner.Plan()` 내부에서 `parseAndValidate()` 실패 시 대화 이력(bad response + 수정 요청 메시지)을 포함한 재시도 요청 전송. 재시도도 실패하면 `types.PlanResult{}, error` 반환
+  - **산출물**: `internal/planner/llm_planner.go`
 
 - [x] **Task 3-4-6. hallucination 방어 로직 구현**
-  - **무엇**: LLMPlanner에서 PlanResult 파싱 직후 ToolName이 registry에 등록된 이름인지 선제 검증. 미등록이면 `llm_parse_error`(retryable)로 분류해 1회 재시도
+  - **무엇**: LLMPlanner에서 PlanResult 파싱 직후 ToolName이 registry에 등록된 이름인지 선제 검증. 미등록이면 재시도, 재시도도 실패하면 에러 반환
   - **왜**: ToolRouter의 `tool_not_found` 처리(Phase 2)는 fatal 에러로 즉시 종료. LLM hallucination에 의한 잘못된 tool 이름은 재시도하면 달라질 수 있으므로 retryable로 처리해야 함. 두 검증의 에러 분류가 다르기 때문에 LLMPlanner 레벨의 선제 검증이 별도로 필요
-  - **산출물**: `internal/planner/llm_planner.go` 내 검증 코드 (ToolRouter는 변경 없음)
+  - **설계 결정**: 파싱/hallucination 실패 시 `PlanResult.ActionType`에 에러 코드를 채우지 않고 `types.PlanResult{}, error`를 반환한다. `ActionType`은 LLM이 선택하는 행동 유형이며, 플래너 내부 에러 분류를 여기에 섞으면 타입의 의미가 오염됨. 에러는 `error` 반환값으로만 전달하는 것이 Go 관용구에 맞음
+  - **산출물**: `internal/planner/llm_planner.go` 내 `parseAndValidate()`, `isRegisteredTool()` (ToolRouter는 변경 없음)
 
 - [x] **Task 3-4-7. LLMPlanner unit test 작성**
-  - **무엇**: MockLLMClient(Task 3-3-1)를 사용해 유효 PlanResult 파싱 성공, invalid JSON 재시도 후 에러 반환, hallucinated tool name 감지 후 `llm_parse_error` 반환 케이스 테스트
-  - **왜**: Phase 5(Task 5-3-4)에서 LLMPlanner 내부 하드코딩 retry를 RetryPolicy로 교체할 때 이 테스트가 회귀 보호 역할을 함. 이 시점에 커버리지를 확보하지 않으면 교체 후 동작 변화를 감지할 수 없음
+  - **무엇**: MockLLMClient(Task 3-3-1)를 사용해 6개 케이스 검증
+    - 유효 respond_directly 파싱 성공 (1회 호출)
+    - 유효 tool_call 파싱 성공 (등록된 tool, 1회 호출)
+    - invalid JSON → 재시도 성공 (2회 호출)
+    - invalid JSON → 재시도도 실패 → error 반환 (2회 호출)
+    - hallucinated tool → 재시도 성공 (2회 호출)
+    - hallucinated tool → 재시도도 실패 → error 반환 (2회 호출)
+  - **왜**: Phase 5(Task 5-3-4)에서 LLMPlanner 내부 하드코딩 retry를 RetryPolicy로 교체할 때 이 테스트가 회귀 보호 역할을 함
   - **산출물**: `internal/planner/llm_planner_test.go`
 
 ### Step 3-5. Token Usage 로깅

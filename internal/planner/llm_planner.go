@@ -67,10 +67,7 @@ func (p *LLMPlanner) Plan(ctx context.Context, s state.AgentState) (types.PlanRe
 
 	result, parseErr = p.parseAndValidate(retryResp.Content, toolList)
 	if parseErr != nil {
-		return types.PlanResult{
-			ActionType: "llm_parse_error",
-			Reasoning:  fmt.Sprintf("LLM 응답 파싱 실패 (재시도 후): %v", parseErr),
-		}, fmt.Errorf("llm parse error after retry: %w", parseErr)
+		return types.PlanResult{}, fmt.Errorf("llm parse error after retry: %w", parseErr)
 	}
 
 	return result, nil

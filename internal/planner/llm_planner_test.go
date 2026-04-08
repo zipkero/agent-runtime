@@ -120,12 +120,9 @@ func TestLLMPlanner_InvalidJSON_RetryAlsoFails(t *testing.T) {
 		WithResponse("still not valid ~~~")
 	p := planner.NewLLMPlanner(mock, newRegistry())
 
-	result, err := p.Plan(context.Background(), baseState())
+	_, err := p.Plan(context.Background(), baseState())
 	if err == nil {
 		t.Fatal("expected error after both attempts fail, got nil")
-	}
-	if result.ActionType != "llm_parse_error" {
-		t.Errorf("action_type = %q, want %q", result.ActionType, "llm_parse_error")
 	}
 	if mock.CallCount() != 2 {
 		t.Errorf("callCount = %d, want 2", mock.CallCount())
@@ -173,12 +170,9 @@ func TestLLMPlanner_HallucinatedTool_RetryAlsoFails(t *testing.T) {
 		WithResponse(mustMarshal(t, hallucinated))
 	p := planner.NewLLMPlanner(mock, newRegistry("search"))
 
-	result, err := p.Plan(context.Background(), baseState())
+	_, err := p.Plan(context.Background(), baseState())
 	if err == nil {
 		t.Fatal("expected error for hallucinated tool, got nil")
-	}
-	if result.ActionType != "llm_parse_error" {
-		t.Errorf("action_type = %q, want %q", result.ActionType, "llm_parse_error")
 	}
 	if mock.CallCount() != 2 {
 		t.Errorf("callCount = %d, want 2", mock.CallCount())
