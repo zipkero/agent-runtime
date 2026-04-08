@@ -83,7 +83,11 @@ func (r *Runtime) Run(ctx context.Context, s state.AgentState) (state.AgentState
 				"reason", result.Reason,
 				"action_type", plan.ActionType,
 			)
-			s.Status = state.StatusFinished
+			if result.Reason == FinishByAskUser {
+				s.Status = state.StatusWaitingInput
+			} else {
+				s.Status = state.StatusFinished
+			}
 			return s, nil
 		}
 

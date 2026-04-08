@@ -107,6 +107,32 @@ func TestRun_RespondDirectly(t *testing.T) {
 	}
 }
 
+// ask_user 발생 시 FinalAnswer 채우고 즉시 종료되는 케이스
+func TestRun_AskUser(t *testing.T) {
+	const question = "어떤 날짜 범위로 검색할까요?"
+	p := planner.NewMockPlanner([]types.PlanResult{
+		{ActionType: types.ActionAskUser, Reasoning: question},
+	})
+	e := executor.NewMockExecutor(nil)
+	rt := newRuntime(p, e, 10)
+
+	got, err := rt.Run(context.Background(), initialState())
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got.Status != state.StatusWaitingInput {
+		t.Errorf("status = %q, want %q", got.Status, state.StatusWaitingInput)
+	}
+	if got.FinalAnswer != question {
+		t.Errorf("FinalAnswer = %q, want %q", got.FinalAnswer, question)
+	}
+	// ask_user 는 Execute 를 호출하지 않으므로 StepCount 는 0 이어야 한다.
+	if got.StepCount != 0 {
+		t.Errorf("StepCount = %d, want 0", got.StepCount)
+	}
+}
+
 // ctx 취소 시 StatusFailed + error 반환 케이스
 func TestRun_ContextCancelled(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
