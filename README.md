@@ -134,6 +134,7 @@ Phase 9  문서화 / 포트폴리오
 - Go 1.21 이상
 - Docker / Docker Compose (통합 테스트 실행 시 필요)
 - `.env` 파일 설정 (`.env.example` 참고)
+- `make` (Windows는 기본 미포함 — `choco install make` 또는 `scoop install make`로 설치)
 
 ### 빌드 및 테스트
 
