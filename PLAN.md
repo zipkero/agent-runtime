@@ -495,7 +495,7 @@ Phase별 상세 Task와 진행 상황을 추적한다.
 
 ### Step 4-4. Long-term Memory
 
-- [ ] **Task 4-4-1. Memory struct 정의**
+- [x] **Task 4-4-1. Memory struct 정의**
   - **무엇**: ID, UserID, Content, Tags, CreatedAt 필드를 갖는 struct
   - **왜**: Postgres에 저장할 레코드 단위의 타입 정의
   - **비고**: `Memory` struct는 `internal/types/memory.go`에 정의한다. `internal/state`에서 `AgentState.RelevantMemories []types.Memory` 필드를 사용하려면 `state → memory` 의존이 생기므로 `internal/types`가 유일한 경계 안전 위치임. PlanResult, ToolResult와 동일한 이유 (Phase 2 Task 2-7-1 참고)
