@@ -482,7 +482,7 @@ Phase별 상세 Task와 진행 상황을 추적한다.
   - **왜**: Redis 연결 전에 동작 검증이 필요. 인터페이스가 같으므로 나중에 Redis로 교체 가능
   - **산출물**: `internal/state/in_memory_session_repository.go`
 
-- [ ] **Task 4-2-4. RedisSessionRepository 구현**
+- [x] **Task 4-2-4. RedisSessionRepository 구현**
   - **무엇**: Redis에 SessionState를 JSON 직렬화하여 저장/조회하는 구현체
   - **왜**: 프로세스 재시작 후에도 세션이 복원되어야 실제 대화 서비스가 가능함
   - **비고**: Phase 4 Exit Criteria의 "Redis 재시작 후 세션 복원" 검증을 위해 `docker-compose.yml`의 Redis 서비스에 `--appendonly yes` 옵션을 추가해 AOF persistence를 활성화해야 함
