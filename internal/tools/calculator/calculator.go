@@ -11,6 +11,9 @@ import (
 	"agentflow/internal/types"
 )
 
+// Kind 는 WorkingMemory 분류 키다.
+const Kind = "calculator"
+
 // Calculator 는 수식 문자열을 받아 계산 결과를 반환하는 Tool 구현체다.
 type Calculator struct{}
 
@@ -42,20 +45,21 @@ func (c *Calculator) InputSchema() tools.Schema {
 func (c *Calculator) Execute(_ context.Context, input map[string]any) (types.ToolResult, error) {
 	raw, ok := input["expression"]
 	if !ok {
-		return types.ToolResult{ToolName: c.Name(), IsError: true, ErrMsg: "expression 필드가 없습니다"}, nil
+		return types.ToolResult{ToolName: c.Name(), Kind: Kind, IsError: true, ErrMsg: "expression 필드가 없습니다"}, nil
 	}
 	expr, ok := raw.(string)
 	if !ok {
-		return types.ToolResult{ToolName: c.Name(), IsError: true, ErrMsg: "expression 은 string 이어야 합니다"}, nil
+		return types.ToolResult{ToolName: c.Name(), Kind: Kind, IsError: true, ErrMsg: "expression 은 string 이어야 합니다"}, nil
 	}
 
 	result, err := evaluate(strings.TrimSpace(expr))
 	if err != nil {
-		return types.ToolResult{ToolName: c.Name(), IsError: true, ErrMsg: err.Error()}, nil
+		return types.ToolResult{ToolName: c.Name(), Kind: Kind, IsError: true, ErrMsg: err.Error()}, nil
 	}
 
 	return types.ToolResult{
 		ToolName: c.Name(),
+		Kind:     Kind,
 		Output:   strconv.FormatFloat(result, 'f', -1, 64),
 	}, nil
 }

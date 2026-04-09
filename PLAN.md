@@ -495,7 +495,7 @@ Phase별 상세 Task와 진행 상황을 추적한다.
 
 ### Step 4-3. Working Memory
 
-- [ ] **Task 4-3-0. ToolResult에 ToolKind 필드 추가**
+- [x] **Task 4-3-0. ToolResult에 ToolKind 필드 추가**
   - **무엇**: `internal/types/tool_result.go`의 ToolResult struct에 `Kind string` 필드 추가. 각 Tool 구현체(`search_mock`, `calculator` 등)가 Execute() 반환 시 Kind 값을 채우도록 수정. Kind 상수(`tool_kind_search`, `tool_kind_calculator` 등)는 `internal/types` 패키지에 정의
   - **왜**: Task 4-3-2에서 Runtime이 ToolResult를 WorkingMemory의 `SearchResults / FilteredResults / Summaries` 필드로 분류 저장하려면 ToolResult에 유형 정보가 있어야 함. 이 필드 없이는 Runtime이 어떤 기준으로 분류할지 판단할 수 없음
   - **비고**: ToolResult를 소비하는 runtime.go, router.go, mock_executor.go, 각 테스트 파일에 컴파일 오류가 없는지 `go build ./...`로 확인 후 Task 4-3-1로 진행. (Phase 2 Task 2-7-1에서 `internal/state` → `internal/types`로 이동됨. `internal/state/tool_result.go` 아님)

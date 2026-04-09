@@ -35,6 +35,9 @@ var mockDB = map[string][]searchResult{
 	},
 }
 
+// Kind 는 WorkingMemory 분류 키다.
+const Kind = "search"
+
 // SearchMock 은 쿼리 문자열을 받아 고정된 검색 결과를 반환하는 mock Tool 구현체다.
 type SearchMock struct{}
 
@@ -66,11 +69,11 @@ func (s *SearchMock) InputSchema() tools.Schema {
 func (s *SearchMock) Execute(_ context.Context, input map[string]any) (types.ToolResult, error) {
 	raw, ok := input["query"]
 	if !ok {
-		return types.ToolResult{ToolName: s.Name(), IsError: true, ErrMsg: "query 필드가 없습니다"}, nil
+		return types.ToolResult{ToolName: s.Name(), Kind: Kind, IsError: true, ErrMsg: "query 필드가 없습니다"}, nil
 	}
 	query, ok := raw.(string)
 	if !ok {
-		return types.ToolResult{ToolName: s.Name(), IsError: true, ErrMsg: "query 는 string 이어야 합니다"}, nil
+		return types.ToolResult{ToolName: s.Name(), Kind: Kind, IsError: true, ErrMsg: "query 는 string 이어야 합니다"}, nil
 	}
 
 	normalized := strings.ToLower(strings.TrimSpace(query))
@@ -86,6 +89,7 @@ func (s *SearchMock) Execute(_ context.Context, input map[string]any) (types.Too
 	if len(matched) == 0 {
 		return types.ToolResult{
 			ToolName: s.Name(),
+			Kind:     Kind,
 			IsError:  true,
 			ErrMsg:   fmt.Sprintf("'%s' 에 대한 검색 결과가 없습니다", query),
 		}, nil
@@ -98,6 +102,7 @@ func (s *SearchMock) Execute(_ context.Context, input map[string]any) (types.Too
 
 	return types.ToolResult{
 		ToolName: s.Name(),
+		Kind:     Kind,
 		Output:   strings.TrimRight(sb.String(), "\n"),
 	}, nil
 }

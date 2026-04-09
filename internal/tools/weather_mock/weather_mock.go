@@ -29,6 +29,9 @@ var mockDB = map[string]weatherData{
 	"shanghai": {Condition: "흐림", TempCelsius: 25, Humidity: 70},
 }
 
+// Kind 는 WorkingMemory 분류 키다.
+const Kind = "weather"
+
 // WeatherMock 은 도시 이름을 받아 고정된 날씨 데이터를 반환하는 mock Tool 구현체다.
 type WeatherMock struct{}
 
@@ -60,11 +63,11 @@ func (w *WeatherMock) InputSchema() tools.Schema {
 func (w *WeatherMock) Execute(_ context.Context, input map[string]any) (types.ToolResult, error) {
 	raw, ok := input["city"]
 	if !ok {
-		return types.ToolResult{ToolName: w.Name(), IsError: true, ErrMsg: "city 필드가 없습니다"}, nil
+		return types.ToolResult{ToolName: w.Name(), Kind: Kind, IsError: true, ErrMsg: "city 필드가 없습니다"}, nil
 	}
 	city, ok := raw.(string)
 	if !ok {
-		return types.ToolResult{ToolName: w.Name(), IsError: true, ErrMsg: "city 는 string 이어야 합니다"}, nil
+		return types.ToolResult{ToolName: w.Name(), Kind: Kind, IsError: true, ErrMsg: "city 는 string 이어야 합니다"}, nil
 	}
 
 	key := strings.ToLower(strings.ReplaceAll(strings.TrimSpace(city), " ", ""))
@@ -72,6 +75,7 @@ func (w *WeatherMock) Execute(_ context.Context, input map[string]any) (types.To
 	if !found {
 		return types.ToolResult{
 			ToolName: w.Name(),
+			Kind:     Kind,
 			IsError:  true,
 			ErrMsg:   fmt.Sprintf("'%s' 에 대한 날씨 데이터가 없습니다", city),
 		}, nil
@@ -82,6 +86,7 @@ func (w *WeatherMock) Execute(_ context.Context, input map[string]any) (types.To
 
 	return types.ToolResult{
 		ToolName: w.Name(),
+		Kind:     Kind,
 		Output:   output,
 	}, nil
 }
