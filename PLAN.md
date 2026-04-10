@@ -507,7 +507,7 @@ Phase별 상세 Task와 진행 상황을 추적한다.
   - **비고**: `LoadByTags`는 **OR 조건** (태그 중 하나라도 포함된 항목 조회). AND 조건은 결과가 지나치게 좁아져 실용성이 없음. Phase 9에서 embedding 검색으로 교체 시 인터페이스 시그니처는 유지하되 내부 구현만 교체
   - **산출물**: `internal/memory/memory_repository.go`
 
-- [ ] **Task 4-4-2-b. InMemoryMemoryRepository 구현**
+- [x] **Task 4-4-2-b. InMemoryMemoryRepository 구현**
   - **무엇**: 슬라이스 기반 MemoryRepository 구현체. `Save`는 슬라이스에 append, `LoadByTags`는 OR 조건(`tags` 중 하나라도 일치)으로 필터링 후 limit 적용
   - **왜**: SessionRepository가 InMemory → Redis 순서를 따른 것과 동일한 이유. PostgresMemoryRepository(Task 4-4-3)가 완성되기 전에 MemoryManager(Task 4-5-2)를 단위 테스트하려면 Postgres 없이 동작하는 구현체가 필요함
   - **산출물**: `internal/memory/in_memory_memory_repository.go`
