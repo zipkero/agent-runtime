@@ -7,15 +7,15 @@ import (
 	"os"
 	"strings"
 
-	"agentflow/internal/agent"
-	"agentflow/internal/executor"
-	"agentflow/internal/llm"
-	"agentflow/internal/planner"
-	"agentflow/internal/state"
-	"agentflow/internal/tools"
-	"agentflow/internal/tools/calculator"
-	"agentflow/internal/tools/search_mock"
-	"agentflow/internal/tools/weather_mock"
+	"github.com/zipkero/gogent/internal/agent"
+	"github.com/zipkero/gogent/internal/executor"
+	"github.com/zipkero/gogent/internal/llm"
+	"github.com/zipkero/gogent/internal/planner"
+	"github.com/zipkero/gogent/internal/state"
+	"github.com/zipkero/gogent/internal/tools"
+	"github.com/zipkero/gogent/internal/tools/calculator"
+	"github.com/zipkero/gogent/internal/tools/search_mock"
+	"github.com/zipkero/gogent/internal/tools/weather_mock"
 )
 
 func main() {

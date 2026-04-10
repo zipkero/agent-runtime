@@ -1,7 +1,7 @@
 package state
 
 import (
-	"agentflow/internal/types"
+	"github.com/zipkero/gogent/internal/types"
 	"time"
 )
 

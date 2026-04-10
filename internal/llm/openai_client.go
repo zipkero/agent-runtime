@@ -10,7 +10,7 @@ import (
 	"net/http"
 	"time"
 
-	"agentflow/internal/observability"
+	"github.com/zipkero/gogent/internal/observability"
 )
 
 const (

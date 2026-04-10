@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	"agentflow/internal/tools"
-	"agentflow/internal/types"
+	"github.com/zipkero/gogent/internal/tools"
+	"github.com/zipkero/gogent/internal/types"
 )
 
 // searchResult 는 단일 검색 결과 항목이다.

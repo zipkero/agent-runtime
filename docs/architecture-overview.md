@@ -1,6 +1,6 @@
 # Architecture Overview
 
-agentflow의 전체 실행 흐름과 컴포넌트 간 관계를 기술한다.
+gogent의 전체 실행 흐름과 컴포넌트 간 관계를 기술한다.
 
 ---
 

@@ -3,10 +3,10 @@ package tools_test
 import (
 	"testing"
 
-	"agentflow/internal/tools"
-	"agentflow/internal/tools/calculator"
-	"agentflow/internal/tools/search_mock"
-	"agentflow/internal/tools/weather_mock"
+	"github.com/zipkero/gogent/internal/tools"
+	"github.com/zipkero/gogent/internal/tools/calculator"
+	"github.com/zipkero/gogent/internal/tools/search_mock"
+	"github.com/zipkero/gogent/internal/tools/weather_mock"
 )
 
 func TestInMemoryToolRegistry_RegisterAndGet(t *testing.T) {

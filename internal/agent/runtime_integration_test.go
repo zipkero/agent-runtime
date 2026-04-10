@@ -5,13 +5,13 @@ import (
 	"encoding/json"
 	"testing"
 
-	"agentflow/internal/executor"
-	"agentflow/internal/planner"
-	"agentflow/internal/state"
-	"agentflow/internal/tools"
-	"agentflow/internal/tools/calculator"
-	"agentflow/internal/types"
-	"agentflow/testutil"
+	"github.com/zipkero/gogent/internal/executor"
+	"github.com/zipkero/gogent/internal/planner"
+	"github.com/zipkero/gogent/internal/state"
+	"github.com/zipkero/gogent/internal/tools"
+	"github.com/zipkero/gogent/internal/tools/calculator"
+	"github.com/zipkero/gogent/internal/types"
+	"github.com/zipkero/gogent/testutil"
 )
 
 // mustMarshalResult 는 PlanResult 를 JSON 문자열로 직렬화한다.

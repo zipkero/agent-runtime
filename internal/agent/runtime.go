@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"log/slog"
 
-	"agentflow/internal/executor"
-	"agentflow/internal/observability"
-	"agentflow/internal/planner"
-	"agentflow/internal/state"
-	"agentflow/internal/types"
+	"github.com/zipkero/gogent/internal/executor"
+	"github.com/zipkero/gogent/internal/observability"
+	"github.com/zipkero/gogent/internal/planner"
+	"github.com/zipkero/gogent/internal/state"
+	"github.com/zipkero/gogent/internal/types"
 )
 
 // Runtime 은 plan → execute → state 반영 → finish 판단 루프를 실행하는 조율자다.

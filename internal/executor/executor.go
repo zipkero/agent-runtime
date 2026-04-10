@@ -3,7 +3,7 @@ package executor
 import (
 	"context"
 
-	"agentflow/internal/types"
+	"github.com/zipkero/gogent/internal/types"
 )
 
 // Executor 는 PlanResult 를 실제 행동으로 연결하고 ToolResult 를 반환하는 인터페이스다.

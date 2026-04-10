@@ -3,8 +3,8 @@ package planner
 import (
 	"context"
 
-	"agentflow/internal/state"
-	"agentflow/internal/types"
+	"github.com/zipkero/gogent/internal/state"
+	"github.com/zipkero/gogent/internal/types"
 )
 
 // MockPlanner 는 미리 정의된 PlanResult 목록을 순서대로 반환하는 테스트용 Planner 다.

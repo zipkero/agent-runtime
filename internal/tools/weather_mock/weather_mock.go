@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	"agentflow/internal/tools"
-	"agentflow/internal/types"
+	"github.com/zipkero/gogent/internal/tools"
+	"github.com/zipkero/gogent/internal/types"
 )
 
 // weatherData 는 도시별 고정 날씨 데이터다.

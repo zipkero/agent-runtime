@@ -5,11 +5,11 @@ import (
 	"encoding/json"
 	"testing"
 
-	"agentflow/internal/planner"
-	"agentflow/internal/state"
-	"agentflow/internal/tools"
-	"agentflow/internal/types"
-	"agentflow/testutil"
+	"github.com/zipkero/gogent/internal/planner"
+	"github.com/zipkero/gogent/internal/state"
+	"github.com/zipkero/gogent/internal/tools"
+	"github.com/zipkero/gogent/internal/types"
+	"github.com/zipkero/gogent/testutil"
 )
 
 // stubTool 은 registry 등록용 최소 Tool 구현체다.

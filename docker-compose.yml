@@ -10,6 +10,6 @@ services:
     environment:
       POSTGRES_USER: agent
       POSTGRES_PASSWORD: agent
-      POSTGRES_DB: agentflow
+      POSTGRES_DB: gogent
     ports:
       - "5432:5432"

@@ -1,4 +1,4 @@
-module agentflow
+module github.com/zipkero/gogent
 
 go 1.26
 

@@ -6,11 +6,11 @@ import (
 	"fmt"
 	"log/slog"
 
-	"agentflow/internal/llm"
-	"agentflow/internal/observability"
-	"agentflow/internal/state"
-	"agentflow/internal/tools"
-	"agentflow/internal/types"
+	"github.com/zipkero/gogent/internal/llm"
+	"github.com/zipkero/gogent/internal/observability"
+	"github.com/zipkero/gogent/internal/state"
+	"github.com/zipkero/gogent/internal/tools"
+	"github.com/zipkero/gogent/internal/types"
 )
 
 // LLMPlanner 는 LLMClient 를 주입받아 LLM 호출로 PlanResult 를 결정하는 Planner 구현체다.

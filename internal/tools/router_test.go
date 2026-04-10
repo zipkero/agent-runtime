@@ -4,9 +4,9 @@ import (
 	"context"
 	"testing"
 
-	"agentflow/internal/tools"
-	"agentflow/internal/tools/calculator"
-	"agentflow/internal/types"
+	"github.com/zipkero/gogent/internal/tools"
+	"github.com/zipkero/gogent/internal/tools/calculator"
+	"github.com/zipkero/gogent/internal/types"
 )
 
 func newRouterWithCalc() *tools.ToolRouter {

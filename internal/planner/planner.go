@@ -3,8 +3,8 @@ package planner
 import (
 	"context"
 
-	"agentflow/internal/state"
-	"agentflow/internal/types"
+	"github.com/zipkero/gogent/internal/state"
+	"github.com/zipkero/gogent/internal/types"
 )
 
 // Planner 는 현재 AgentState 를 보고 다음 행동(PlanResult)을 결정하는 인터페이스다.

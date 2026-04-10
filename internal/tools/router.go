@@ -6,8 +6,8 @@ import (
 	"log/slog"
 	"time"
 
-	"agentflow/internal/observability"
-	"agentflow/internal/types"
+	"github.com/zipkero/gogent/internal/observability"
+	"github.com/zipkero/gogent/internal/types"
 )
 
 // ToolRouter 는 PlanResult 를 받아 registry 에서 tool 을 조회하고 실행한다.

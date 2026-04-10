@@ -1,6 +1,6 @@
 package state
 
-import "agentflow/internal/types"
+import "github.com/zipkero/gogent/internal/types"
 
 // AgentState 는 Agent Loop 전체가 공유하는 aggregator 상태 구조체다.
 // 요청 범위(Request)와 세션 범위(Session)를 명시적으로 분리하고,
