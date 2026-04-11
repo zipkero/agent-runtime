@@ -512,7 +512,7 @@ Phase별 상세 Task와 진행 상황을 추적한다.
   - **왜**: SessionRepository가 InMemory → Redis 순서를 따른 것과 동일한 이유. PostgresMemoryRepository(Task 4-4-3)가 완성되기 전에 MemoryManager(Task 4-5-2)를 단위 테스트하려면 Postgres 없이 동작하는 구현체가 필요함
   - **산출물**: `internal/memory/in_memory_memory_repository.go`
 
-- [ ] **Task 4-4-2-c. Postgres 스키마 초기화 코드 작성**
+- [x] **Task 4-4-2-c. Postgres 스키마 초기화 코드 작성**
   - **무엇**: 앱 시작 시 `memories` 테이블(`id UUID`, `user_id TEXT`, `content TEXT`, `tags TEXT[]`, `created_at TIMESTAMPTZ`)과 태그 검색용 GIN 인덱스를 `CREATE TABLE IF NOT EXISTS`로 생성하는 `migrate` 함수 작성
   - **왜**: Task 4-4-3에서 PostgresMemoryRepository를 구현하기 전에 테이블이 없으면 실행 자체가 불가능함. 새 마이그레이션 라이브러리 의존 없이 Go 표준 `database/sql`로 처리하는 방식을 사용해 커리큘럼 학습 목표에 집중
   - **비고**: `internal/memory/migrate.go`에 `Migrate(db *sql.DB) error` 함수로 작성. `cmd/agent-cli/main.go` 또는 앱 초기화 경로에서 DB 연결 직후 호출. Phase 9에서 포트폴리오화 시 `golang-migrate` 전환을 검토할 수 있음
