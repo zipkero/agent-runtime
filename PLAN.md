@@ -556,7 +556,7 @@ Phase별 상세 Task와 진행 상황을 추적한다.
 
 ### Step 4-7. 설계 결정 문서화
 
-- [ ] **Task 4-7-1. Phase 4 설계 결정 기록**
+- [x] **Task 4-7-1. Phase 4 설계 결정 기록**
   - **무엇**: RequestState/SessionState 분리 근거, Memory struct의 `internal/types` 배치 결정, MemoryManager 파사드 패턴 선택 이유, RedisSessionRepository AOF 설정 배경, Long-term Memory 주입 방식으로 C안(Run() 시작 시 1회 주입) 채택 근거를 `docs/decisions/phase4.md`에 기록
   - **왜**: 상태 분리 경계 결정은 Phase 6 multi-agent와 Phase 7 서비스화에서 계속 영향을 미침. 특히 `internal/types` 공유 타입 확장 이력이 문서에 없으면 나중에 경계 위반을 모르고 추가할 수 있음
   - **산출물**: `docs/decisions/phase4.md`
