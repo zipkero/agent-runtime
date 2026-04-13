@@ -49,7 +49,7 @@ func TestRun_EndToEnd_RealToolExecution(t *testing.T) {
 	p := planner.NewLLMPlanner(mockLLM, reg)
 	router := tools.NewToolRouter(reg)
 	e := executor.NewToolExecutor(router)
-	rt := NewRuntime(p, e, 10)
+	rt := NewRuntime(p, e, nil, 10)
 
 	s := state.AgentState{
 		Request: state.RequestState{

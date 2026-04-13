@@ -21,4 +21,7 @@ type AgentState struct {
 	Status AgentStatus
 	// CurrentPlan 은 가장 최근 Planner 가 반환한 결정이다 (loop step 범위).
 	CurrentPlan types.PlanResult
+	// RelevantMemories 는 Run() 시작 시 LoadRelevantMemory 로 조회된 Long-term Memory 목록이다.
+	// prompt_builder 가 이 필드를 읽어 system prompt 의 context 섹션에 포함한다.
+	RelevantMemories []types.Memory
 }

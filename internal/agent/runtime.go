@@ -6,6 +6,7 @@ import (
 	"log/slog"
 
 	"github.com/zipkero/agent-runtime/internal/executor"
+	"github.com/zipkero/agent-runtime/internal/memory"
 	"github.com/zipkero/agent-runtime/internal/observability"
 	"github.com/zipkero/agent-runtime/internal/planner"
 	"github.com/zipkero/agent-runtime/internal/state"
@@ -14,19 +15,21 @@ import (
 
 // Runtime 은 plan → execute → state 반영 → finish 판단 루프를 실행하는 조율자다.
 type Runtime struct {
-	Planner  planner.Planner
-	Executor executor.Executor
-	MaxStep  int
-	logger   *slog.Logger
+	Planner       planner.Planner
+	Executor      executor.Executor
+	MemoryManager memory.MemoryManager
+	MaxStep       int
+	logger        *slog.Logger
 }
 
 // NewRuntime 은 Runtime 을 생성한다.
-func NewRuntime(p planner.Planner, e executor.Executor, maxStep int) *Runtime {
+func NewRuntime(p planner.Planner, e executor.Executor, mm memory.MemoryManager, maxStep int) *Runtime {
 	return &Runtime{
-		Planner:  p,
-		Executor: e,
-		MaxStep:  maxStep,
-		logger:   observability.New(),
+		Planner:       p,
+		Executor:      e,
+		MemoryManager: mm,
+		MaxStep:       maxStep,
+		logger:        observability.New(),
 	}
 }
 
@@ -39,6 +42,18 @@ func (r *Runtime) Run(ctx context.Context, s state.AgentState) (state.AgentState
 		base = observability.New()
 	}
 	log := observability.FromContext(ctx, base)
+
+	// Long-term Memory 조회: Run() 시작 시 1회 호출하여 AgentState 에 주입
+	if r.MemoryManager != nil && s.Request.UserInput != "" {
+		memories, err := r.MemoryManager.LoadRelevantMemory(ctx, s.Request.UserInput)
+		if err != nil {
+			log.WarnContext(ctx, "failed to load relevant memory, continuing without it",
+				"error", err,
+			)
+		} else {
+			s.RelevantMemories = memories
+		}
+	}
 
 	for {
 		// ctx 취소 확인

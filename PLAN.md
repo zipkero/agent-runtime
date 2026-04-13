@@ -542,7 +542,7 @@ Phase별 상세 Task와 진행 상황을 추적한다.
 
 ### Step 4-6. Long-term Memory → Planner 피드백 연결
 
-- [ ] **Task 4-6-1. Runtime에 Long-term Memory 주입 및 prompt_builder 반영**
+- [x] **Task 4-6-1. Runtime에 Long-term Memory 주입 및 prompt_builder 반영**
   - **무엇**: `Runtime.Run()` 진입 직후(루프 시작 전) `MemoryManager.LoadRelevantMemory(ctx, userInput)`을 1회 호출해 결과를 `AgentState.RelevantMemories`에 저장. `prompt_builder`는 이 필드를 읽어 system prompt의 context 섹션에 포함
   - **왜**: Long-term Memory 조회를 LLM이 tool로 호출하는 방식(A안)은 호출 누락 시 메모리가 활용되지 않는 신뢰성 문제가 있음. 대화형 에이전트는 과거 맥락이 항상 보장되어야 하므로 Runtime이 Run() 시작 시 1회 주입하는 방식(C안)을 채택. UserInput이 이미 확정된 시점에 조회하므로 쿼리 기준이 명확하고 루프 내 반복 DB 조회가 없음
   - **비고**: `AgentState.RelevantMemories []types.Memory` 필드 추가. `Memory` struct가 `internal/types`에 있으므로 `state → types` 의존만 발생하며 패키지 경계 규칙을 위반하지 않음. prompt_builder는 MemoryManager를 직접 알지 않고 AgentState만 참조하므로 패키지 경계 유지. Run() 종료 후 새로 생성된 Memory는 별도 경로(MemoryManager.SaveMemory)로 저장

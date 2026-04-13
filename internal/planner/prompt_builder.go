@@ -47,7 +47,17 @@ func BuildSystemPrompt(s state.AgentState, toolList []tools.Tool) string {
 		}
 	}
 
-	// 3. 현재 실행 컨텍스트
+	// 3. Long-term Memory 컨텍스트
+	if len(s.RelevantMemories) > 0 {
+		b.WriteString("## 관련 기억\n\n")
+		b.WriteString("아래는 이전 대화에서 저장된 관련 기억이다. 응답 시 참고하라.\n\n")
+		for i, m := range s.RelevantMemories {
+			b.WriteString(fmt.Sprintf("%d. %s\n", i+1, m.Content))
+		}
+		b.WriteString("\n")
+	}
+
+	// 4. 현재 실행 컨텍스트
 	b.WriteString("## 현재 실행 컨텍스트\n\n")
 	b.WriteString(fmt.Sprintf("- **현재 step**: %d\n", s.StepCount+1))
 
