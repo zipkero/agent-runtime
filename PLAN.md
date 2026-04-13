@@ -269,7 +269,7 @@ Phase별 상세 Task와 진행 상황을 추적한다.
 - [x] **Task 2-6-1. AgentError 타입 정의**
   - **무엇**: `retryable`/`fatal` 구분과 `tool_not_found`, `input_validation_failed`, `tool_execution_failed`, `llm_parse_error` 서브타입을 갖는 에러 타입 정의
   - **왜**: Phase 2 ToolRouter에서 이미 에러 유형을 다르게 처리하고 있음. 상수화된 타입이 없으면 Phase 5 retry 정책에서 "어떤 에러에 재시도할지" 판단 기준이 없음. `tool_not_found`는 fatal, `tool_execution_failed`는 retryable 같은 구분이 이 시점에 고정되어야 함
-  - **산출물**: `internal/agent/errors.go`
+  - **산출물**: `internal/types/errors.go`
 
 ### Step 2-7. 공유 타입 패키지 분리
 
@@ -1060,7 +1060,7 @@ Phase별 상세 Task와 진행 상황을 추적한다.
 - [ ] **Task 8-4-1. 에러 타입 분류 확장**
   - **무엇**: Phase 2에서 정의한 기본 에러 타입에 `user_error`, `system_error`, `provider_error` 분류 추가
   - **왜**: 기본 retryable/fatal 구분은 Phase 2에서 정의됨. 이 단계에서는 알림, 사용자 응답 메시지, 모니터링 레이블에 사용할 운영 관점의 분류를 추가하는 것이 목적
-  - **산출물**: `internal/agent/errors.go` 확장
+  - **산출물**: `internal/types/errors.go` 확장
 
 ### Step 8-5. Policy Layer
 

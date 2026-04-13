@@ -87,7 +87,7 @@ parseAndValidate → tool_name not in registry → error("hallucinated tool name
 
 CLI 환경에서 `action_type == ask_user`이면 `s.FinalAnswer = plan.Reasoning`으로 질문 문자열을 채운 뒤 즉시 loop를 종료한다.
 
-HTTP API 비동기 대기 메커니즘(사용자 응답을 기다리며 loop를 suspend)은 Phase 7에서 구현한다.
+HTTP API 비동기 대기 메커니즘(사용자 응답을 기다리며 loop를 suspend)은 Phase 7 Task 7-5-1에서 구현한다.
 
 ---
 
