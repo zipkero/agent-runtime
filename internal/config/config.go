@@ -32,17 +32,8 @@ func Load() (*Config, error) {
 }
 
 func (c *Config) validate() error {
-	required := map[string]string{
-		"OPENAI_API_KEY": c.OpenAIAPIKey,
-		"REDIS_URL":      c.RedisURL,
-		"POSTGRES_URL":   c.PostgresURL,
+	if c.OpenAIAPIKey == "" {
+		return fmt.Errorf("config: 필수 환경변수 OPENAI_API_KEY 가 설정되지 않았습니다")
 	}
-
-	for key, val := range required {
-		if val == "" {
-			return fmt.Errorf("config: 필수 환경변수 %s 가 설정되지 않았습니다", key)
-		}
-	}
-
 	return nil
 }

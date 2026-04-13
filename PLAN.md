@@ -548,7 +548,7 @@ Phase별 상세 Task와 진행 상황을 추적한다.
   - **비고**: `AgentState.RelevantMemories []types.Memory` 필드 추가. `Memory` struct가 `internal/types`에 있으므로 `state → types` 의존만 발생하며 패키지 경계 규칙을 위반하지 않음. prompt_builder는 MemoryManager를 직접 알지 않고 AgentState만 참조하므로 패키지 경계 유지. Run() 종료 후 새로 생성된 Memory는 별도 경로(MemoryManager.SaveMemory)로 저장
   - **산출물**: `internal/agent/runtime.go` 수정 (Run() 시작 시 LoadRelevantMemory 호출), `internal/state/agent_state.go` 수정 (RelevantMemories 필드 추가), `internal/planner/prompt_builder.go` 수정 (RelevantMemories → system prompt 반영)
 
-- [ ] **Task 4-6-2. Runtime 종료 후 Memory 저장 경로 구현**
+- [x] **Task 4-6-2. Runtime 종료 후 Memory 저장 경로 구현**
   - **무엇**: `Runtime.Run()` 종료 직후 대화 결과(FinalAnswer + ToolResults 요약)를 `MemoryManager.SaveMemory(ctx, Memory)`로 저장하는 로직 구현. 저장 대상은 `FinalAnswer`가 비어있지 않은 정상 완료 케이스만 해당 (실패/중단 시 저장하지 않음)
   - **왜**: Task 4-6-1 비고에 "Run() 종료 후 새로 생성된 Memory는 별도 경로(MemoryManager.SaveMemory)로 저장"이라고 명시했으나, 이를 구현하는 Task가 없었음. 저장 경로가 없으면 LoadRelevantMemory가 항상 빈 결과를 반환하게 되어 Long-term Memory 기능이 실질적으로 동작하지 않음
   - **비고**: Memory 저장 호출 위치는 `Runtime.Run()` 반환 직후 (CLI: `main.go`, HTTP API: Worker goroutine). Runtime 내부가 아닌 호출자에서 저장하는 이유는 Runtime이 MemoryManager에 직접 의존하는 범위를 최소화하기 위함 (Load는 Run 시작 시 1회, Save는 호출자 책임)
