@@ -68,24 +68,39 @@ func main() {
 		os.Exit(1)
 	}
 
+	sessionID := agent.FixedSessionID
+
+	// Session Load: 이전 세션 상태 복원
+	sess, err := mm.LoadSession(context.Background(), sessionID)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "세션 로드 실패: %v\n", err)
+		os.Exit(1)
+	}
+	if sess.SessionID == "" {
+		sess.SessionID = sessionID
+	}
+
 	s := state.AgentState{
 		Request: state.RequestState{
 			RequestID: agent.NewRequestID(),
 			UserInput: input,
 		},
-		Session: &state.SessionState{
-			SessionID: agent.FixedSessionID,
-		},
-		Status: state.StatusRunning,
+		Session: &sess,
+		Status:  state.StatusRunning,
 	}
 
-	result, err := rt.Run(context.Background(), s)
+	// context에 추적 ID 주입 (structured logger에서 사용)
+	ctx := context.Background()
+	ctx = observability.WithRequestID(ctx, s.Request.RequestID)
+	ctx = observability.WithSessionID(ctx, s.Session.SessionID)
+
+	result, err := rt.Run(ctx, s)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "실행 실패: %v\n", err)
 		os.Exit(1)
 	}
 
-	// 정상 완료 + FinalAnswer 가 있을 때만 Memory 저장
+	// 정상 완료 + FinalAnswer 가 있을 때만 Memory 저장 + Session 갱신
 	if result.FinalAnswer != "" {
 		content := buildMemoryContent(result)
 		tags := extractTags(input)
@@ -96,8 +111,19 @@ func main() {
 			Tags:      tags,
 			CreatedAt: time.Now(),
 		}
-		if saveErr := mm.SaveMemory(context.Background(), mem); saveErr != nil {
+		if saveErr := mm.SaveMemory(ctx, mem); saveErr != nil {
 			fmt.Fprintf(os.Stderr, "메모리 저장 실패: %v\n", saveErr)
+		}
+
+		// Session Save: RecentContext에 이번 대화 요약 추가 후 저장
+		if result.Session != nil {
+			updatedSess := *result.Session
+			exchange := fmt.Sprintf("Q: %s → A: %s", input, result.FinalAnswer)
+			updatedSess.RecentContext = append(updatedSess.RecentContext, exchange)
+			updatedSess.LastUpdated = time.Now()
+			if saveErr := mm.SaveSession(ctx, sessionID, updatedSess); saveErr != nil {
+				fmt.Fprintf(os.Stderr, "세션 저장 실패: %v\n", saveErr)
+			}
 		}
 	}
 

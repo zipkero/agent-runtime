@@ -234,7 +234,7 @@ ToolRouter.Route(ctx, PlanResult):
 ```
 
 `request_id` / `session_id`는 `context.WithValue`로 전달된다.
-호출 전에 `tools.WithRequestID(ctx, state.RequestID)` 형태로 context에 주입해야 로그에 값이 찍힌다.
+호출 전에 `observability.WithRequestID(ctx, state.RequestID)` 형태로 context에 주입해야 로그에 값이 찍힌다.
 
 ### 4. AgentError — 에러 분류 체계
 
@@ -254,7 +254,8 @@ AgentError {
 | `tool_not_found` | false | tool 이름이 잘못된 것이므로 재시도해도 동일 결과 |
 | `input_validation_failed` | false | 외부 시스템 또는 사용자가 보낸 입력 구조 자체가 잘못됨 — 재시도로 해결 불가 |
 | `llm_parse_error` | true | LLM이 잘못된 JSON 또는 존재하지 않는 tool 이름을 반환한 경우 — 재요청하면 달라질 수 있음. LLM이 생성한 input이 schema와 맞지 않는 경우도 이 Kind로 분류 |
-| `tool_execution_failed` | true | 일시적 오류(네트워크, 타임아웃 등) 가능성 있음 |
+| `tool_execution_failed` | true | 일시적 오류(네트워크 등) 가능성 있음 |
+| `tool_timeout` | true | tool 실행이 deadline을 초과한 경우 — 재시도 시 성공 가능 |
 
 > `input_validation_failed`와 `llm_parse_error`의 구분: LLM output 파싱/검증 단계에서 발생한 오류는 `llm_parse_error`(retryable), 외부 입력 검증 단계에서 발생한 오류는 `input_validation_failed`(fatal).
 

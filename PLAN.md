@@ -44,7 +44,7 @@ Phase별 상세 Task와 진행 상황을 추적한다.
 
 ### Step 0-3. 프로젝트 초기화
 
-- [x] **Task 0-3-1. 디렉터리 구조 생성**
+- [ ] **Task 0-3-1. 디렉터리 구조 생성**
   - **무엇**: 아래 디렉터리 전체를 한 번에 생성
     - `cmd/agent-cli/` — Phase 1 CLI 진입점
     - `cmd/agent-api/` — Phase 7 HTTP API 서버 진입점 (미리 생성, Phase 7까지 빈 stub)
@@ -60,6 +60,7 @@ Phase별 상세 Task와 진행 상황을 추적한다.
     - `docs/`, `docs/decisions/`, `docs/scenarios/`
   - **왜**: 경계를 디렉터리로 물리적으로 분리해두어야 이후 패키지 간 의존 방향을 강제할 수 있음. 나중에 추가하면 stub 생성 없이 구현부터 작성하게 되어 go build가 이미 깨진 시점에 경계 위반을 발견하게 됨
   - **산출물**: 디렉터리 트리
+  - **비고**: Phase 4까지 필요한 디렉터리만 생성 완료. 미생성: `cmd/agent-api/`, `internal/verifier/`, `internal/orchestration/`, `internal/api/`, `internal/queue/`, `docs/scenarios/` — 해당 Phase 시작 시 생성
 
 - [x] **Task 0-3-2. 각 패키지 stub 파일 생성 + go build 통과**
   - **무엇**: Task 0-3-1에서 생성한 모든 디렉터리에 `package` 선언만 있는 빈 `.go` 파일 생성. `testutil/`은 `package testutil`로 선언
