@@ -219,11 +219,19 @@ internal/agent
 
 Tool Calling이 가능한 Single Agent를 구현한다.
 
-### 구현 범위
+### 구현 범위 (하위 분할)
+
+이 Phase는 이질적인 Tool과 Agent 실행 구조가 섞여 있어 feature-dir와 implement 사이클을 두 갈래로 나눈다.
+소수점 번호는 5.1을 먼저 구현하고 5.2가 그 위에서 Single Agent 실행을 완성하는 선행 의존을 뜻한다.
+
+#### Phase 5.1 — Tool 묶음
 
 * Web Search Tool (Tavily 검색 API 연동)
 * File Save Tool
 * Code Execution Tool
+
+#### Phase 5.2 — Agent 실행 구조 (5.1 이후)
+
 * Middleware hook (pre / post model)
 * Structured Output
 * Single Agent runner
@@ -260,12 +268,20 @@ internal/graph
 
 내부 문서를 검색하고 답변에 활용하는 RAG 구조를 구현한다.
 
-### 구현 범위
+### 구현 범위 (하위 분할)
+
+이 Phase는 인덱싱 파이프라인과 검색·활용이 선형 의존이라 feature-dir와 implement 사이클을 두 갈래로 나눈다.
+소수점 번호는 6.1 → 6.2 순서로 진행하는 선행 의존을 뜻한다.
+
+#### Phase 6.1 — 인덱싱 파이프라인
 
 * document loader
 * chunker
 * embedding client (외부 임베딩 API 또는 로컬 모델 호출, interface로 추상화)
 * vector store (Postgres + pgvector)
+
+#### Phase 6.2 — 검색·활용 (6.1 이후)
+
 * retriever
 * retrieval tool
 * source metadata
@@ -302,16 +318,27 @@ internal/agent
 
 여러 Agent가 역할을 나누어 협력하는 구조를 구현한다.
 
-### 구현 범위
+### 구현 범위 (하위 분할)
+
+이 Phase는 분량이 크고 패턴이 서로 독립적이라 feature-dir와 implement 사이클을 세 갈래로 나눈다.
+소수점 번호는 정수 Phase 같은 직렬 의존이 아니라, 7.1을 토대로 7.2·7.3이 올라가는 동급 분할을 뜻한다.
+
+#### Phase 7.1 — Worker / Supervisor 기반
 
 * `WorkerAgent` interface (transport-agnostic)
 * `Supervisor`
 * `HandoffCommand`
 * `WorkerAgent` → `Tool` adapter (agent-as-tool 슈퍼바이저용)
-* Network Pattern
 * Supervisor Pattern (handoff형 / agent-as-tool형)
+
+#### Phase 7.2 — 협력 패턴 (7.1 위 동급)
+
+* Network Pattern
 * Hierarchical Pattern
 * Planner-Worker Pattern
+
+#### Phase 7.3 — 구체 Worker & 합성 (7.1 위 동급)
+
 * Research Agent
 * Writer Agent
 * Result aggregation
@@ -479,18 +506,26 @@ internal/orchestrator
 
 Web Search, RAG, File Management를 포함한 범용 Multi-Agent를 하나의 `agent-runtime`으로 통합한다.
 
-### 구현 범위
+### 구현 범위 (하위 분할)
 
-* Orchestrator Agent
+이 Phase는 Worker 구성과 오케스트레이션이 선형 의존이라 feature-dir와 implement 사이클을 두 갈래로 나눈다.
+소수점 번호는 11.1로 Worker들을 갖춘 뒤 11.2가 이를 묶는 선행 의존을 뜻한다. 대부분 앞 Phase 재사용·조립이다.
+
+#### Phase 11.1 — Worker Agent 구성
+
 * Web Search Agent (Tavily 검색 API)
 * Internal RAG Agent (Postgres + pgvector, Phase 6 재사용)
 * File Management Agent (로컬 파일시스템 기반; Google Drive 등 외부 스토리지는 이후 어댑터로 확장)
 * Writer Agent
 * optional Reviewer Agent
-* A2A 기반 remote worker 호출
-* local worker fallback
+
+#### Phase 11.2 — 오케스트레이션 (11.1 이후)
+
+* Orchestrator Agent
 * intent analysis
 * plan generation
+* A2A 기반 remote worker 호출
+* local worker fallback
 * result aggregation
 * final response generation
 
@@ -578,12 +613,21 @@ User Request
 03. Tool Calling Runtime
 04. Graph Runtime
 05. Single Agent Runtime
+    05.1 Tool 묶음
+    05.2 Agent 실행 구조
 06. RAG Runtime
+    06.1 인덱싱 파이프라인
+    06.2 검색·활용
 07. Multi-Agent Runtime
+    07.1 Worker / Supervisor 기반
+    07.2 협력 패턴
+    07.3 구체 Worker & 합성
 08. Memory Runtime
 09. MCP Adapter
 10. A2A Adapter
 11. Final Orchestrator Runtime
+    11.1 Worker Agent 구성
+    11.2 오케스트레이션
 12. Runtime Refinement
 ```
 
