@@ -4,6 +4,15 @@ Go 기반 AI Agent Runtime 구현 프로젝트입니다.
 
 이 프로젝트는 LangChain, LangGraph를 사용하지 않고 LLM 기반 Agent Runtime을 직접 구현합니다.
 
+## 이 Runtime이 하는 일 (제품 목적)
+
+완성된 Runtime의 기본 제품 목적은 **범용 리서치 에이전트**입니다. 주제를 받으면 웹 검색과(있으면) 내부
+문서를 근거로 모아, 검증을 거쳐 인용이 달린 리포트를 파일로 산출합니다.
+
+특정 도메인 특기(예: 여행, 사내 기술 문서)는 런타임을 수정하지 않고 **capability pack**(도메인 Tool set +
+RAG 코퍼스 + 프롬프트 + Worker 구성 묶음)을 추가하는 방식으로 확장합니다. 기본 pack은 `general-research`이며,
+런타임 본체는 어떤 pack이 끼워지든 바뀌지 않습니다.
+
 예제 코드를 단계별로 분리해 보관하지 않고, 하나의 Go 코드베이스를 점진적으로 발전시키는 방식으로 진행합니다.
 
 즉 이 프로젝트의 목적은 LLM 기반 Agent를 구성하는 핵심 개념을 Go 기반 Runtime 구조로 흡수해, 하나의
@@ -394,5 +403,6 @@ Agent는 실행 과정이 중요합니다.
 * 복잡한 권한 시스템
 * Agent Marketplace
 * 완전한 Framework 제품화
+* 도메인 특기 capability pack (예: travel pack)
 
 이 항목들은 Runtime 완성 후 확장 과제로 다룹니다.
