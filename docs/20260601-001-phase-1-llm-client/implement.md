@@ -21,7 +21,7 @@
 
 ## Section: message
 
-- [ ] task-002: provider-neutral 메시지 타입 정의
+- [x] task-002: provider-neutral 메시지 타입 정의
   - 목적: user / assistant / tool / system 메시지와 tool call·tool result를 하나의 모델로
     표현할 수 있고, 한 assistant 메시지가 텍스트와 tool call을 함께 담을 수 있다.
   - 접근: `internal/message`에 content-block 스타일 타입을 정의한다. Role(user/assistant/
