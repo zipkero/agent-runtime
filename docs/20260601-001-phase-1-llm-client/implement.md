@@ -10,7 +10,7 @@
 
 ## Section: 의존성
 
-- [ ] task-001: Anthropic Go SDK 의존성 추가
+- [x] task-001: Anthropic Go SDK 의존성 추가
   - 목적: 프로젝트가 공식 Anthropic Go SDK를 사용할 수 있는 상태가 된다.
   - 접근: 기존 go.mod에 `go get github.com/anthropics/anthropic-sdk-go`로 SDK를 추가하고
     `go mod tidy`로 go.mod / go.sum을 정리한다. SDK import는 이후 Claude 구현체에만 둔다.
