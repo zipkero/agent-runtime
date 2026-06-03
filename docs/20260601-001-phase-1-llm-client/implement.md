@@ -93,7 +93,7 @@
       llm/...`로 확인. 테스트는 네트워크 없이 통과해야 한다.
   - 참조: SPEC §5.7, SPEC §5.2, SPEC §5.3, ANALYSIS §5(Decision 4)
 
-- [ ] task-006: Claude 구현체 (SDK 호출 + internal↔Claude wire 매핑 + 관찰 가능한 에러)
+- [x] task-006: Claude 구현체 (SDK 호출 + internal↔Claude wire 매핑 + 관찰 가능한 에러)
   - 목적: config로 주입된 api key·model로 실제 Claude를 호출해 응답을 받고, deadline 초과나
     잘못된 key 같은 실패가 에러로 표면화된다.
   - 접근: `internal/llm`에 Claude 구현체를 두어 LLMClient를 만족시킨다. config(api key·model·
