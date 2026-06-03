@@ -6,12 +6,12 @@ Go 기반 AI Agent Runtime 구현 프로젝트입니다.
 
 ## 이 Runtime이 하는 일 (제품 목적)
 
-완성된 Runtime의 기본 제품 목적은 **범용 리서치 에이전트**입니다. 주제를 받으면 웹 검색과(있으면) 내부
-문서를 근거로 모아, 검증을 거쳐 인용이 달린 리포트를 파일로 산출합니다.
+이 Runtime 본체는 특정 도메인에 묶이지 않습니다. 도메인 성격은 런타임을 수정하지 않고 **plugin**(도메인
+Tool set + RAG 코퍼스 + 프롬프트 + Worker 구성 묶음)을 끼워 주입하며, 본체는 어떤 plugin이 끼워지든 바뀌지
+않습니다. (고정 코어에 확장을 끼우는 plugin/microkernel 구조입니다.)
 
-특정 도메인 특기(예: 여행, 사내 기술 문서)는 런타임을 수정하지 않고 **capability pack**(도메인 Tool set +
-RAG 코퍼스 + 프롬프트 + Worker 구성 묶음)을 추가하는 방식으로 확장합니다. 기본 pack은 `general-research`이며,
-런타임 본체는 어떤 pack이 끼워지든 바뀌지 않습니다.
+첫 번째로 만들 plugin은 **사내 지식·기획** 방향입니다. 사내 지식과 결정 히스토리를 저장하고, 그 위에서
+문의·기획을 돕습니다. 범용 리서치 같은 다른 성격도 같은 런타임 위의 또 다른 plugin으로 둘 수 있습니다.
 
 예제 코드를 단계별로 분리해 보관하지 않고, 하나의 Go 코드베이스를 점진적으로 발전시키는 방식으로 진행합니다.
 
@@ -316,6 +316,15 @@ Runtime
 → Provider implementation (실제 API 호출)
 ```
 
+### 엔진은 도메인에 묶이지 않는다
+
+`internal/*` 엔진 코드에는 특정 도메인(리서치·사내 지식 등)의 어휘나 가정이 들어가지 않습니다. 도메인 성격은
+프롬프트·코퍼스·Tool·Worker 구성, 즉 plugin으로만 표현합니다.
+
+### 도메인 구성은 주입받는다
+
+system prompt, tool 목록, worker 구성은 코드에 박지 않고 주입받습니다. 조립은 진입점(`cmd`)에서 합니다.
+
 ### Tool은 schema-first로 설계한다
 
 Tool Calling은 LLM의 자연어 응답에 의존하지 않고 명확한 schema 기반으로 처리합니다.
@@ -403,6 +412,6 @@ Agent는 실행 과정이 중요합니다.
 * 복잡한 권한 시스템
 * Agent Marketplace
 * 완전한 Framework 제품화
-* 도메인 특기 capability pack (예: travel pack)
+* 사내 지식·기획 외의 추가 도메인 plugin (예: coding plugin) — 첫 plugin 이후 확장
 
 이 항목들은 Runtime 완성 후 확장 과제로 다룹니다.
