@@ -62,7 +62,7 @@
 
 ## Section: llm
 
-- [ ] task-004: LLMClient interface와 ChatRequest / ChatResponse 모델 정의
+- [x] task-004: LLMClient interface와 ChatRequest / ChatResponse 모델 정의
   - 목적: 호출자가 단일 Chat 호출 계약 하나에만 의존하고, 요청에 메시지 목록과 tool 정의를
     담아 전달하며, 응답으로 assistant 메시지를 받을 수 있다.
   - 접근: `internal/llm`에 `LLMClient` interface(단일 메서드 `Chat(ctx context.Context,
