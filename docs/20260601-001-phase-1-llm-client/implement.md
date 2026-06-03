@@ -77,7 +77,7 @@
       으로 확인.
   - 참조: SPEC §5.2, SPEC §5.3, SPEC §5.4, ANALYSIS §5(Decision 3)
 
-- [ ] task-005: StubClient 구현 및 결정적 stub 기반 테스트
+- [x] task-005: StubClient 구현 및 결정적 stub 기반 테스트
   - 목적: 실제 API 없이도 미리 정한 응답(텍스트 응답·tool call 응답 모두)을 돌려주는
     교체용 클라이언트로 테스트를 결정적으로 통과시킬 수 있다.
   - 접근: `internal/llm`에 `StubClient`를 두어 LLMClient를 만족시키고, 미리 구성한
