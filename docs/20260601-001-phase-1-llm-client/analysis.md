@@ -21,8 +21,9 @@
 
 - 본 Phase는 Phase 0 전부를 완성하는 것이 목표가 아니다. spec §5 완료 조건을
   관찰 가능하게 만드는 데 필요한 최소 부트스트랩(`cmd/agent-runtime`의 최소 CLI,
-  `internal/config`)까지만 포함한다. logger 정식화·`.env` 자동 로딩 같은 Phase 0의 잔여
-  항목은 본 Phase 완료 조건이 요구하지 않으므로 범위 밖으로 둔다.
+  `internal/config`)까지만 포함한다. `.env` 자동 로딩은 본 Phase 범위에 포함한다(spec §5.5,
+  Decision 6). logger 정식화 같은 나머지 Phase 0 잔여 항목은 본 Phase 완료 조건이 요구하지
+  않으므로 범위 밖으로 둔다.
 - **Go module 초기화(`go mod init`)는 사용자가 직접 수행하는 선행 작업이며 본 Phase 산출물
   범위에서 제외한다.** 즉 implement 시작 시점에 `go.mod`가 이미 존재한다고 전제한다. 외부
   의존성(Anthropic Go SDK)을 추가하는 `go get`·`go mod tidy`는 구현 작업의 일부로 수행한다.
@@ -139,7 +140,7 @@ type LLMClient interface {
 
 ```go
 type ChatRequest struct {
-    Model    string             // 미지정 시 config 기본값
+    Model    string             // 미지정 시 config.Model 사용
     Messages []message.Message  // provider-neutral
     Tools    []message.ToolSpec // tool call 유도용 schema (정의만; 실행은 Phase 3)
 }
@@ -198,12 +199,12 @@ type ToolResult struct {
 
 ```go
 type Config struct {
-    AnthropicAPIKey string // 환경변수에서 주입 (§5.5)
-    Model           string // 기본 model, 환경변수로 override 가능
-    Timeout         time.Duration // LLM 호출 기본 timeout (§5.6)
+    AnthropicAPIKey string // 환경변수/.env에서 주입, 필수 (§5.5)
+    Model           string // 환경변수/.env에서 주입, 필수 (기본값 없음)
+    Timeout         time.Duration // LLM 호출 timeout, 미지정 시 기본값 (§5.6)
 }
 
-func Load() (Config, error) // 환경변수에서 읽음; 필수 key 누락 시 error
+func Load() (Config, error) // 환경변수/.env에서 읽음; 필수 api key·model 누락 시 error
 ```
 
 ## 4. 영향 범위
@@ -315,15 +316,20 @@ func Load() (Config, error) // 환경변수에서 읽음; 필수 key 누락 시 
   - (A) `os.Getenv` 기반 환경변수만 읽기(의존성 0).
   - (B) `.env` 자동 로딩 라이브러리(예: `godotenv`) 추가.
 - 트레이드오프
-  - (A): 의존성 없이 §5.5(env 주입, 소스 변경 없이 key·model 교체)를 만족. `.env`는 셸에서
-    `export` 또는 `set -a; source .env`로 주입 가능하므로 기능 손실 없음. `.gitignore`가 이미
-    `.env`를 무시 중이라 파일 자체는 둘 수 있다.
-  - (B): 편의는 좋으나 의존성 추가. `.env` 자동 로딩은 ROADMAP상 Phase 0 항목이며 본 Phase
-    §5 완료 조건이 요구하지 않는다.
-- 채택: **(A) 환경변수 기반(`os.Getenv`), `.env` 자동 로딩 라이브러리 미도입.**
-- 근거: §5.5는 "환경변수 등"으로 주입되고 소스 변경 없이 교체 가능하면 충족된다. 의존성
-  최소화 원칙과 본 Phase 범위(최소 부트스트랩) 디시플린에 부합한다. `.env` 자동 로딩이
-  필요해지면 Phase 0 잔여로 별도 도입한다.
+  - (A): 의존성 없이 §5.5(env 주입, 소스 변경 없이 key·model 교체)를 만족. 그러나 `.env`를
+    쓰려면 매 실행 전 셸에서 `export` 또는 `set -a; source .env`를 해야 해, 로컬 개발
+    경험이 번거롭고 실수로 key를 빠뜨리기 쉽다.
+  - (B): `godotenv` 의존성 1개를 추가하지만, 프로젝트 루트 `.env`를 코드가 자동 로딩해 로컬
+    실행이 `go run`만으로 끝난다. `godotenv.Load`는 이미 설정된 실제 환경변수를 덮어쓰지
+    않으므로, CI·운영의 환경변수 주입 방식과 충돌하지 않는다. `.gitignore`가 이미 `.env`를
+    무시 중이라 secret이 커밋될 위험도 없다.
+- 채택: **(B) `godotenv`로 `.env` 자동 로딩 도입.** `config.Load` 진입 시 `godotenv.Load()`를
+  먼저 호출하고(파일 없으면 에러 무시) 이후 `os.Getenv`로 읽는다. 실제 환경변수가 `.env`보다
+  우선한다.
+- 근거: §5.5의 "환경변수 또는 `.env` 파일" 주입을 코드 한 곳에서 만족하고, 로컬 개발자가
+  매번 셸 주입을 반복하지 않아도 된다. 추가 의존성은 LangChain/LangGraph 금지 제약(spec §3)에
+  걸리지 않는 단순 dotenv 파서이며, SDK 의존과 마찬가지로 config 경계 안에만 둔다. 덮어쓰지
+  않는 로딩 정책 덕에 운영 환경의 주입 방식을 침범하지 않는다.
 
 ### Decision 7 — internal 메시지 ↔ Claude wire 매핑 위치
 

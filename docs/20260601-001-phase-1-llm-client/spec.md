@@ -55,6 +55,8 @@ ROADMAP Phase 1(LLM 기반 의사결정 구조)의 요구사항 명세다. LLM�
 3. chat 요청에 대한 응답에서, 일반 텍스트 응답과 tool call 요청 응답을 호출자가 구분해 확인할 수 있다.
 4. user / assistant / tool / system 메시지와 tool call·tool result를 표현하는 메시지 타입이 존재하며,
    이를 chat 요청에 담아 전달할 수 있다.
-5. api key가 config(환경변수 등)로 주입되며, 소스 변경 없이 다른 key·model 값으로 호출할 수 있다.
+5. api key가 config(환경변수 또는 프로젝트 루트 `.env` 파일)로 주입되며, 소스 변경 없이 다른
+   key·model 값으로 호출할 수 있다. `.env`가 있으면 자동 로딩되되, 이미 설정된 실제 환경변수가
+   우선한다.
 6. LLM 호출에 timeout이 적용되어, 제한 시간을 초과하면 호출이 에러로 종료되고 그 사실이 관찰 가능하다.
 7. stub client를 사용한 테스트가 실제 API 호출 없이 결정적으로 통과한다.

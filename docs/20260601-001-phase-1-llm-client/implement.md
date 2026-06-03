@@ -40,17 +40,24 @@
 
 ## Section: config
 
-- [ ] task-003: 환경변수 기반 config 로더 정의
-  - 목적: api key·model·timeout이 환경변수로 주입되며, 소스 변경 없이 다른 key·model 값으로
-    실행을 바꿀 수 있다.
+- [x] task-003: 환경변수·`.env` 기반 config 로더 정의
+  - 목적: api key·model·timeout이 환경변수 또는 프로젝트 루트 `.env`로 주입되며, 소스 변경
+    없이 다른 key·model 값으로 실행을 바꿀 수 있다.
   - 접근: `internal/config`에 Config{AnthropicAPIKey, Model, Timeout time.Duration}와
-    `Load() (Config, error)`를 둔다. os.Getenv로만 읽고 .env 자동 로딩 라이브러리는 도입하지
-    않는다. api key 누락 시 error를 반환하고, model·timeout은 미지정 시 기본값을 적용한다.
+    `Load() (Config, error)`를 둔다. `go get github.com/joho/godotenv`로 의존성을 추가하고,
+    Load 진입 시 `godotenv.Load()`를 먼저 호출(파일 없으면 에러 무시)한 뒤 os.Getenv로 읽는다.
+    `godotenv.Load`는 이미 설정된 실제 환경변수를 덮어쓰지 않아 실제 환경변수가 `.env`보다
+    우선한다. api key·model은 필수라 누락 시 error를 반환한다(model 기본값 없음). timeout은
+    미지정 시 기본값을 적용한다. `.env`는 `.gitignore`로 무시되며, 키 목록을 담은
+    `.env.example` 템플릿을 함께 둔다.
   - 검증 조건:
-    - 결과: 환경변수 설정에 따라 Config 필드가 채워지고, 필수 api key가 없으면 Load가 error를
-      반환한다. 서로 다른 환경변수 값으로 Load하면 서로 다른 Config가 나온다.
-    - 확인: t.Setenv로 환경변수를 세팅한 단위 테스트 — key 존재 시 성공·필드 값 일치, key
-      누락 시 error, model override 반영을 `go test ./internal/config/...`로 확인.
+    - 결과: 환경변수 설정에 따라 Config 필드가 채워지고, 필수 api key·model이 없으면 Load가
+      error를 반환한다. 서로 다른 환경변수 값으로 Load하면 서로 다른 Config가 나온다. `.env`가
+      있으면 그 값이 로딩되되 실제 환경변수가 우선한다.
+    - 확인: t.Setenv로 환경변수를 세팅한 단위 테스트 — key·model 존재 시 성공·필드 값 일치,
+      key 또는 model 누락 시 error, model 값 반영을 `go test ./internal/config/...`로 확인. `.env`
+      자동 로딩과 실제 환경변수 우선은 임시 디렉터리에 `.env`를 쓰고 작업 디렉터리를 바꿔
+      검증한다.
   - 참조: SPEC §5.5, ANALYSIS §5(Decision 6)
 
 ## Section: llm
