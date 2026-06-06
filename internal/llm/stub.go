@@ -21,6 +21,7 @@ func NewErrorStubClient(err error) *StubClient {
 }
 
 func (c *StubClient) Chat(ctx context.Context, req ChatRequest) (ChatResponse, error) {
+	// 실제 client처럼 취소된 ctx를 먼저 존중해, 호출부의 취소·timeout 동작을 stub으로도 재현한다.
 	if err := ctx.Err(); err != nil {
 		return ChatResponse{}, err
 	}

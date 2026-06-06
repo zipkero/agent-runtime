@@ -38,6 +38,8 @@ func NewClaudeClient(cfg config.Config) (*ClaudeClient, error) {
 	return newClaudeClient(cfg, claudeClientOptions{})
 }
 
+// newClaudeClient 은 NewClaudeClient의 구현부이자 테스트 주입 지점이다.
+// opts로 baseURL·httpClient를 받아 httptest 서버로 SDK 호출을 가로챌 수 있게 한다.
 func newClaudeClient(cfg config.Config, opts claudeClientOptions) (*ClaudeClient, error) {
 	apiKey := strings.TrimSpace(cfg.AnthropicAPIKey)
 	if apiKey == "" {
