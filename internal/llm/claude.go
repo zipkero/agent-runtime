@@ -15,6 +15,7 @@ import (
 	"github.com/zipkero/agent-runtime/internal/message"
 )
 
+// Messages API는 max_tokens가 필수라 config에 값이 없을 때 적용할 기본값을 둔다.
 const defaultClaudeMaxTokens int64 = 1024
 
 var _ LLMClient = (*ClaudeClient)(nil)
@@ -48,6 +49,9 @@ func newClaudeClient(cfg config.Config, opts claudeClientOptions) (*ClaudeClient
 		return nil, fmt.Errorf("%s is required", config.EnvModel)
 	}
 
+	// SDK 환경변수 기본값을 끄고 인증을 config로만 주입한다. 재시도를 0으로 둬
+	// 일시 실패(429·5xx 등)나 timeout이 자동 재시도·백오프 대기에 가려지지 않고
+	// 호출 1회 결과 그대로 에러로 표면화되게 한다.
 	sdkOptions := []option.RequestOption{
 		option.WithoutEnvironmentDefaults(),
 		option.WithAPIKey(apiKey),
@@ -72,6 +76,9 @@ func newClaudeClient(cfg config.Config, opts claudeClientOptions) (*ClaudeClient
 	}, nil
 }
 
+// Chat 은 req를 Claude Messages API 한 번의 호출로 변환해 assistant 응답을 돌려준다.
+// ctx는 SDK 호출에 그대로 전파되어 취소·deadline을 따르며, ctx 취소·timeout과
+// 인증 실패(401)는 호출자가 구분할 수 있는 error로 표면화된다.
 func (c *ClaudeClient) Chat(ctx context.Context, req ChatRequest) (ChatResponse, error) {
 	if err := ctx.Err(); err != nil {
 		return ChatResponse{}, err
@@ -84,6 +91,7 @@ func (c *ClaudeClient) Chat(ctx context.Context, req ChatRequest) (ChatResponse,
 
 	resp, err := c.client.Messages.New(ctx, params)
 	if err != nil {
+		// SDK가 ctx 취소·deadline을 자체 에러로 감싸므로 원래 context 에러로 되돌린다.
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			return ChatResponse{}, ctxErr
 		}
@@ -122,6 +130,8 @@ func (c *ClaudeClient) newMessageParams(req ChatRequest) (anthropic.MessageNewPa
 	}, nil
 }
 
+// claudeMessagesFromInternal 은 internal 메시지를 Claude messages로 변환하되,
+// system 역할은 Claude API 규약상 별도 System 필드로 분리해 두 번째 값으로 반환한다.
 func claudeMessagesFromInternal(messages []message.Message) ([]anthropic.MessageParam, []anthropic.TextBlockParam, error) {
 	var params []anthropic.MessageParam
 	var system []anthropic.TextBlockParam
@@ -147,6 +157,7 @@ func claudeMessagesFromInternal(messages []message.Message) ([]anthropic.Message
 		case message.RoleAssistant:
 			params = append(params, anthropic.NewAssistantMessage(blocks...))
 		case message.RoleTool:
+			// tool_result는 Anthropic wire에서 user 메시지의 content block으로 전달된다.
 			params = append(params, anthropic.NewUserMessage(blocks...))
 		default:
 			return nil, nil, fmt.Errorf("unsupported message role %q", msg.Role)
@@ -219,6 +230,9 @@ func claudeToolsFromInternal(tools []message.ToolSpec) ([]anthropic.ToolUnionPar
 	return params, nil
 }
 
+// claudeInputSchemaFromInternal 은 tool의 JSON schema를 SDK ToolInputSchemaParam으로
+// 변환한다. SDK는 properties·required를 분리 필드로 받고 나머지 키는 ExtraFields로
+// 넘기므로, 추출한 키는 원본 map에서 제거해 중복 전달을 막는다.
 func claudeInputSchemaFromInternal(raw json.RawMessage) (anthropic.ToolInputSchemaParam, error) {
 	if len(raw) == 0 {
 		return anthropic.ToolInputSchemaParam{}, nil
@@ -271,6 +285,8 @@ func requiredFields(value any) ([]string, error) {
 	return fields, nil
 }
 
+// claudeMessageToChatResponse 는 Claude 응답을 assistant 역할의 internal 메시지로
+// 되돌린다. text·tool_use 블록만 처리하며 그 외 블록 타입은 에러로 반환한다.
 func claudeMessageToChatResponse(resp *anthropic.Message) (ChatResponse, error) {
 	if resp == nil {
 		return ChatResponse{}, fmt.Errorf("claude response is nil")

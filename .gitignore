@@ -29,3 +29,6 @@ go.work.sum
 .idea
 .vscode
 
+
+# project binary
+/agent-runtime

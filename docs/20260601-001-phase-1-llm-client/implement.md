@@ -113,7 +113,7 @@
 
 ## Section: cli
 
-- [ ] task-007: CLI 진입점 — 프롬프트 입력→LLM 호출→응답 출력, 실패는 stderr
+- [x] task-007: CLI 진입점 — 프롬프트 입력→LLM 호출→응답 출력, 실패는 stderr
   - 목적: 사용자가 CLI에 입력한 프롬프트로 LLM을 호출해 결과를 stdout으로 출력하고, timeout
     초과·잘못된 key 같은 실패는 stderr로 관찰 가능하게 출력한다.
   - 접근: `cmd/agent-runtime/main.go`에서 config.Load → Claude LLMClient 생성(config 주입)

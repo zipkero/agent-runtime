@@ -7,7 +7,7 @@ Runtime과 분리하고, 메시지 타입·chat 요청/응답·timeout·CLI 진�
 ## 상태
 - [x] SPEC
 - [x] ANALYSIS
-- [ ] IMPLEMENT
+- [x] IMPLEMENT
 
 ## 문서
 - [spec.md](./spec.md)
@@ -18,3 +18,4 @@ Runtime과 분리하고, 메시지 타입·chat 요청/응답·timeout·CLI 진�
 - 2026-06-01: SPEC 작성
 - 2026-06-01: ANALYSIS 작성
 - 2026-06-01: IMPLEMENT 체크리스트 작성
+- 2026-06-05: IMPLEMENT 완료
