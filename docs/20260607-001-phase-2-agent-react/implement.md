@@ -22,7 +22,7 @@ Task는 위치 순서가 곧 의존성 순서다. 각 Task는 목적 / 접근 / 
       (running 제외 final/max steps/error)과 1:1 대응한다.
   - 참조: SPEC §5.1, §5.2, §5.4, §5.5. ANALYSIS §2(종료 상태 집합), D1, D5.
 
-- [ ] task-002: Agent와 ReAct loop 실행
+- [x] task-002: Agent와 ReAct loop 실행
   - 목적: 주입된 LLM client와 max step·reflection hook을 들고, 사용자 입력으로 시작한 loop를
     매 step LLM 호출·응답 누적하며 돌려 최종답·max step 초과·에러 중 하나로 종료된 상태를 반환한다.
   - 접근: `internal/agent`에 `Agent` 구조체와 생성 함수를 둔다. 생성 함수는 `llm.LLMClient`(interface,
