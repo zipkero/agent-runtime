@@ -82,7 +82,7 @@ CLI 쪽은 `run`이 단발 `client.Chat` 대신 Agent를 만들어 loop를 한 �
 - **에러(error)**: LLM 호출이 에러를 반환해 안전 종료한 상태. 호출자는 그 사실과 원인(에러)을
   확인할 수 있다(SPEC §5.5).
 
-`final`·`max steps`·`error`는 terminal이며, loop는 이 중 하나에 도달하면 더 이상 LLM을
+`final`·`max steps`·`error`는 종료 상태이며, loop는 이 중 하나에 도달하면 더 이상 LLM을
 호출하지 않는다.
 
 ### loop 한 회전
@@ -167,11 +167,11 @@ Phase 2의 가장 중요한 경계다. tool_call이 온 응답은 "아직 최종
 - 옵션 A: 명시적 상태 enum(running/final/max steps/error) 필드 하나로 종료 상태를 표현.
 - 옵션 B: bool 플래그 조합(`done`, `errored`, `maxedOut`)으로 표현.
 - 옵션 C: 에러 유무와 메시지 내용만으로 호출자가 추론(별도 상태 필드 없음).
-- 트레이드오프: A는 terminal 집합이 코드에 한 점으로 드러나 §5.4의 "final이 아니라 max step
+- 트레이드오프: A는 종료 상태 집합이 코드에 한 점으로 드러나 §5.4의 "final이 아니라 max step
   임을 구분"을 자연스럽게 만족한다. B는 불가능한 조합(done+errored 동시 true)이 표현 가능해져
   불변식 부담이 생긴다. C는 max steps와 final을 구분하기 어렵다(SPEC §5.4 위반 위험).
 - 채택: **A(명시적 상태 enum)**. 근거: §5.4·§5.5가 요구하는 "종료 종류 구분"을 단일 필드로
-  보장하고, §2에서 enumerate한 terminal 집합과 1:1 대응한다.
+  보장하고, §2에서 enumerate한 종료 상태 집합과 1:1 대응한다.
 
 ### D2. 종료 판정 위치
 
@@ -212,7 +212,7 @@ Phase 2의 가장 중요한 경계다. tool_call이 온 응답은 "아직 최종
   확인"을 단일 표면으로 만족한다. B는 호출자가 에러와 state 두 군데를 봐야 해 종료 상태 모델과
   중복된다. 단, ctx 취소처럼 LLM 호출 단계에서 온 에러도 동일하게 error 상태로 흡수한다(SPEC
   §3, §5.5).
-- 채택: **A(state에 흡수)**. 근거: §2의 terminal 집합과 일관되고, CLI는 종료 상태만 보고
+- 채택: **A(state에 흡수)**. 근거: §2의 종료 상태 집합과 일관되고, CLI는 종료 상태만 보고
   stderr/종료코드를 가르면 된다(SPEC §5.5, §5.7).
 
 ### D6. tool_call 응답을 Phase 2에서 다루는 방식

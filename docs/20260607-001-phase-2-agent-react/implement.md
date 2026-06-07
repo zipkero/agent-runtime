@@ -5,7 +5,7 @@ Task는 위치 순서가 곧 의존성 순서다. 각 Task는 목적 / 접근 / 
 
 ## Section: agent 패키지 — 상태와 loop
 
-- [ ] task-001: AgentState와 종료 상태 모델
+- [x] task-001: AgentState와 종료 상태 모델
   - 목적: Agent 실행 결과를 담는 상태 값이 종료 종류(진행중·최종답·max step 초과·에러)를
     하나의 명시적 상태로 구분하고, 누적 메시지·진행 step 수·원인 에러를 함께 보관한다.
   - 접근: 새 패키지 `internal/agent`에 `agent.go`를 만든다. 종료 상태를 나타내는 enum 타입
@@ -18,7 +18,7 @@ Task는 위치 순서가 곧 의존성 순서다. 각 Task는 목적 / 접근 / 
   - 검증 조건:
     - 결과: `internal/agent` 패키지가 컴파일되고, `AgentState`가 종료 상태 enum·누적 메시지·step
       수·원인 에러를 모두 표현한다. `go build ./...`가 통과한다.
-    - 확인: `go vet ./internal/agent/...` 통과. 종료 상태 enum의 네 값이 §2 terminal 집합
+    - 확인: `go vet ./internal/agent/...` 통과. 종료 상태 enum의 네 값이 §2 종료 상태 집합
       (running 제외 final/max steps/error)과 1:1 대응한다.
   - 참조: SPEC §5.1, §5.2, §5.4, §5.5. ANALYSIS §2(종료 상태 집합), D1, D5.
 
