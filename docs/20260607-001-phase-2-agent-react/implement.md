@@ -72,7 +72,7 @@ Task는 위치 순서가 곧 의존성 순서다. 각 Task는 목적 / 접근 / 
 
 ## Section: CLI 진입점 교체
 
-- [ ] task-004: run을 Agent loop로 교체하고 종료 상태별 출력 분기
+- [x] task-004: run을 Agent loop로 교체하고 종료 상태별 출력 분기
   - 목적: CLI가 단발 Chat 호출 대신 Agent loop로 입력을 처리해, 최종 답을 stdout에 출력하고
     max step 초과·에러·취소는 원인을 stderr에 쓰며 비정상 종료코드로 끝낸다.
   - 접근: `cmd/agent-runtime/main.go`의 `run`을 Agent 기반으로 바꾼다. `run` 시그니처에 max step을

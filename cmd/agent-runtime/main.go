@@ -1,5 +1,5 @@
-// CLI 진입점: 사용자 프롬프트를 읽어 LLM을 호출하고 결과를 stdout으로 출력한다.
-// 실패(timeout·인증 오류)는 stderr로 출력하고 비정상 종료코드로 종료한다.
+// CLI 진입점: 사용자 프롬프트를 읽어 Agent loop를 통해 처리하고 결과를 stdout으로 출력한다.
+// 실패(timeout·인증 오류·max step 초과)는 stderr로 출력하고 비정상 종료코드로 종료한다.
 package main
 
 import (
@@ -9,10 +9,14 @@ import (
 	"os"
 	"strings"
 
+	"github.com/zipkero/agent-runtime/internal/agent"
 	"github.com/zipkero/agent-runtime/internal/config"
 	"github.com/zipkero/agent-runtime/internal/llm"
 	"github.com/zipkero/agent-runtime/internal/message"
 )
+
+// defaultMaxSteps 는 config에 노출하지 않는 Agent loop의 기본 step 상한이다.
+const defaultMaxSteps = 10
 
 func main() {
 	cfg, err := config.Load()
@@ -36,7 +40,7 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), cfg.Timeout)
 	defer cancel()
 
-	code := run(ctx, client, cfg.Model, prompt)
+	code := run(ctx, client, cfg.Model, prompt, defaultMaxSteps)
 	os.Exit(code)
 }
 
@@ -54,37 +58,38 @@ func readPrompt() (string, error) {
 	return strings.TrimSpace(strings.Join(lines, "\n")), nil
 }
 
-// run 은 프롬프트로 LLM을 호출해 응답을 출력하고 종료코드(0: 성공, 1: 실패)를 반환한다.
-func run(ctx context.Context, client llm.LLMClient, model, prompt string) int {
-	req := llm.ChatRequest{
-		Model: model,
-		Messages: []message.Message{
-			{
-				Role:    message.RoleUser,
-				Content: []message.ContentBlock{message.NewTextBlock(prompt)},
-			},
-		},
-	}
+// run 은 Agent loop를 통해 프롬프트를 처리하고 종료 상태별로 출력을 분기한 뒤 종료코드를 반환한다.
+// final이면 최종 답을 stdout에 출력하고 0을 반환한다.
+// error·ctx 취소이면 원인을 stderr에 쓰고 1을 반환한다.
+// max step 초과이면 "max step 초과" 문구를 stderr에 쓰고 1을 반환한다.
+func run(ctx context.Context, client llm.LLMClient, model, prompt string, maxSteps int) int {
+	a := agent.NewAgent(client, model, maxSteps, nil)
+	state := a.Run(ctx, prompt)
 
-	resp, err := client.Chat(ctx, req)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "chat error: %v\n", err)
+	switch state.Status {
+	case agent.StatusFinal:
+		finalMsg, ok := state.FinalMessage()
+		if ok {
+			printMessage(finalMsg)
+		}
+		return 0
+	case agent.StatusMaxSteps:
+		// max step 초과는 실패로 표현 — error와 문구를 구분해 원인을 드러낸다.
+		fmt.Fprintf(os.Stderr, "max step 초과로 최종 답에 도달하지 못함 (step=%d)\n", state.Steps)
+		return 1
+	default:
+		// StatusError: 원인 에러를 stderr에 쓰고 비정상 종료코드(ctx 취소도 동일 처리).
+		fmt.Fprintf(os.Stderr, "chat error: %v\n", state.Err)
 		return 1
 	}
-
-	printResponse(resp)
-	return 0
 }
 
-// printResponse 는 ChatResponse의 Content를 텍스트와 tool call로 구분해 stdout에 출력한다.
-func printResponse(resp llm.ChatResponse) {
-	for _, block := range resp.Message.Content {
-		switch block.Type {
-		case message.BlockTypeText:
+// printMessage 는 Message의 Content를 텍스트 블록만 골라 stdout에 출력한다.
+// tool_call 블록은 final 상태에서 나타나지 않으므로 텍스트만 처리한다.
+func printMessage(msg message.Message) {
+	for _, block := range msg.Content {
+		if block.Type == message.BlockTypeText {
 			fmt.Print(block.Text)
-		case message.BlockTypeToolCall:
-			tc := block.ToolCall
-			fmt.Printf("[tool_call] name=%s id=%s input=%s\n", tc.Name, tc.ID, string(tc.Input))
 		}
 	}
 	fmt.Println()

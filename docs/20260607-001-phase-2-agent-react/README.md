@@ -10,7 +10,7 @@ ROADMAP Phase 2. Agent가 단발 LLM 호출이 아니라 `AgentState`를 유지�
 
 - [x] SPEC
 - [x] ANALYSIS
-- [ ] IMPLEMENT
+- [x] IMPLEMENT
 
 ## 문서
 
@@ -23,3 +23,4 @@ ROADMAP Phase 2. Agent가 단발 LLM 호출이 아니라 `AgentState`를 유지�
 - 2026-06-07: SPEC 작성
 - 2026-06-07: ANALYSIS 작성
 - 2026-06-07: IMPLEMENT 체크리스트 작성
+- 2026-06-07: IMPLEMENT 완료 (task-001~004 구현·verify)

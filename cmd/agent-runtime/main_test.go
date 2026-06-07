@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"os"
@@ -48,7 +49,8 @@ func captureStderr(t *testing.T, f func()) string {
 	return buf.String()
 }
 
-func TestRun_TextResponse_WritesToStdout(t *testing.T) {
+// TestRun_TextResponse_Final 은 text 응답이 오면 final 상태로 stdout에 출력되고 종료코드 0을 반환하는지 검증한다.
+func TestRun_TextResponse_Final(t *testing.T) {
 	stub := llm.NewStubClient(llm.ChatResponse{
 		Message: message.Message{
 			Role:    message.RoleAssistant,
@@ -58,7 +60,7 @@ func TestRun_TextResponse_WritesToStdout(t *testing.T) {
 
 	var code int
 	out := captureStdout(t, func() {
-		code = run(context.Background(), stub, "claude-3-5-haiku-20241022", "안녕")
+		code = run(context.Background(), stub, "claude-3-5-haiku-20241022", "안녕", 5)
 	})
 
 	if code != 0 {
@@ -72,49 +74,54 @@ func TestRun_TextResponse_WritesToStdout(t *testing.T) {
 	}
 }
 
-func TestRun_ToolCall_WritesDistinctToStdout(t *testing.T) {
-	stub := llm.NewStubClient(llm.ChatResponse{
+// TestRun_MaxSteps_WritesToStderrAndExitsNonZero 는 tool_call만 반복 반환하는 stub으로
+// max step 초과 시 stderr에 원인이 출력되고 비정상 종료코드로 끝나는지 검증한다.
+// 기존 TestRun_ToolCall_WritesDistinctToStdout을 loop 의미에 맞게 재정의한 케이스다.
+func TestRun_MaxSteps_WritesToStderrAndExitsNonZero(t *testing.T) {
+	// tool_call 응답을 계속 반환해 max step 초과를 유도한다.
+	toolCallResp := llm.ChatResponse{
 		Message: message.Message{
 			Role: message.RoleAssistant,
 			Content: []message.ContentBlock{
 				message.NewToolCallBlock(message.ToolCall{
 					ID:    "tc-1",
 					Name:  "search",
-					Input: []byte(`{"query":"test"}`),
+					Input: json.RawMessage(`{"query":"test"}`),
 				}),
 			},
 		},
-	})
+	}
+	stub := llm.NewStubClient(toolCallResp)
 
 	var code int
-	out := captureStdout(t, func() {
-		code = run(context.Background(), stub, "claude-3-5-haiku-20241022", "검색해줘")
+	errOut := captureStderr(t, func() {
+		// maxSteps=2로 빠르게 소진한다.
+		code = run(context.Background(), stub, "claude-3-5-haiku-20241022", "검색해줘", 2)
 	})
 
-	if code != 0 {
-		t.Fatalf("종료코드 0 기대, 실제: %d", code)
+	if code == 0 {
+		t.Fatal("max step 초과 시 비정상 종료코드(non-zero) 기대")
 	}
-	// tool call 구분 표시([tool_call] 접두사)가 stdout에 있어야 한다.
-	if !contains(out, "[tool_call]") {
-		t.Errorf("tool call 구분 표시가 stdout에 없다: %q", out)
-	}
-	if !contains(out, "search") {
-		t.Errorf("tool name이 stdout에 없다: %q", out)
+	// max step 초과임을 드러내는 문구가 stderr에 있어야 한다.
+	if !contains(errOut, "max step") {
+		t.Errorf("max step 초과 문구가 stderr에 없다: %q", errOut)
 	}
 }
 
 func TestRun_ChatError_WritesToStderrAndExitsNonZero(t *testing.T) {
-	stub := llm.NewErrorStubClient(errors.New("인증 실패"))
+	// client 에러의 원인 텍스트가 stderr로 전파되는지만 확인한다.
+	causeErr := errors.New("chat 호출 실패")
+	stub := llm.NewErrorStubClient(causeErr)
 
 	var code int
 	errOut := captureStderr(t, func() {
-		code = run(context.Background(), stub, "claude-3-5-haiku-20241022", "안녕")
+		code = run(context.Background(), stub, "claude-3-5-haiku-20241022", "안녕", 5)
 	})
 
 	if code == 0 {
 		t.Fatal("에러 시 비정상 종료코드(non-zero) 기대")
 	}
-	if !contains(errOut, "인증 실패") {
+	if !contains(errOut, causeErr.Error()) {
 		t.Errorf("에러 메시지가 stderr에 없다: %q", errOut)
 	}
 }
@@ -132,7 +139,7 @@ func TestRun_ContextCanceled_WritesToStderrAndExitsNonZero(t *testing.T) {
 
 	var code int
 	errOut := captureStderr(t, func() {
-		code = run(ctx, stub, "claude-3-5-haiku-20241022", "안녕")
+		code = run(ctx, stub, "claude-3-5-haiku-20241022", "안녕", 5)
 	})
 
 	if code == 0 {
