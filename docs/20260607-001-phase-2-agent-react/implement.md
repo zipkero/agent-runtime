@@ -49,7 +49,7 @@ Task는 위치 순서가 곧 의존성 순서다. 각 Task는 목적 / 접근 / 
   - 참조: SPEC §5.1, §5.2, §5.3, §5.4, §5.5, §5.6. ANALYSIS §2(loop 한 회전·tool_call 처리·hook
     시점), §3(인터페이스), D2, D3, D4, D5, D6, D8.
 
-- [ ] task-003: agent loop 결정적 테스트 (정상 종료·max step 두 경로)
+- [x] task-003: agent loop 결정적 테스트 (정상 종료·max step 두 경로)
   - 목적: 실제 API 호출 없이 stub만으로 정상 종료(최종 답 도달)와 실패 종료(max step 초과) 두 경로,
     그리고 에러 종료·hook 관찰·메시지 누적·step 증가가 결정적으로 검증된다.
   - 접근: `internal/agent`에 `agent_test.go`를 만든다. step마다 다른 응답을 순서대로 반환하는 다단계
