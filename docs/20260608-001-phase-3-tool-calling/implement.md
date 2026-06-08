@@ -29,7 +29,7 @@ ROADMAP Phase 3(Tool Calling Runtime) 실행 체크리스트다. analysis.md의 
       구분됨, `Specs()`가 등록한 tool 수만큼 schema를 반환함. `go test ./internal/tool/...` 통과.
   - 참조: SPEC §5.1, SPEC §5.2, SPEC §5.3 / ANALYSIS §1, §3, D2, D3
 
-- [ ] task-003: tool_call 하나를 받아 검증·timeout·정규화·unknown을 모두 흡수해 ToolResult로 돌려주는 dispatcher를 구현한다.
+- [x] task-003: tool_call 하나를 받아 검증·timeout·정규화·unknown을 모두 흡수해 ToolResult로 돌려주는 dispatcher를 구현한다.
   - 목적: 어떤 tool_call이든 unknown·검증 실패·실행 에러·timeout이 발생해도 throw 없이 에러 표시된 결과로 정규화되어 돌아온다.
   - 접근: `internal/tool`에 dispatch 표면을 둔다(registry 메서드 또는 별도 타입, D2 옵션 B) — 입력은 `message.ToolCall`
     하나(또는 묶음)와 loop ctx, 출력은 `message.ToolResult`. 처리 순서: (1) 이름 lookup 실패 → 본체 미실행,
