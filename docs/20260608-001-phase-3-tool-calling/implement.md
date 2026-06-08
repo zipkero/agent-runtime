@@ -18,7 +18,7 @@ ROADMAP Phase 3(Tool Calling Runtime) 실행 체크리스트다. analysis.md의 
     - 확인: `go build ./internal/tool/...` 통과. `go vet ./internal/tool/...` 통과.
   - 참조: SPEC §5.1, SPEC §5.2, SPEC §5.3 / ANALYSIS §3, D1
 
-- [ ] task-002: tool을 이름으로 등록·조회하고 등록된 schema를 한데 모으는 registry를 구현한다.
+- [x] task-002: tool을 이름으로 등록·조회하고 등록된 schema를 한데 모으는 registry를 구현한다.
   - 목적: tool을 이름으로 등록하면 충돌 여부를 호출자가 확인할 수 있고, 이름으로 조회하거나 전체 schema를 모을 수 있다.
   - 접근: `internal/tool`에 `Registry` 타입과 `Register(t Tool) error`(같은 이름 충돌 시 등록 거부 + error 반환으로
     호출자가 결과 확인, SPEC §5.1), 이름 lookup(존재/unknown 구분, SPEC §5.2), `Specs() []message.ToolSpec`(등록
