@@ -8,15 +8,21 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/zipkero/agent-runtime/internal/agent"
 	"github.com/zipkero/agent-runtime/internal/config"
 	"github.com/zipkero/agent-runtime/internal/llm"
 	"github.com/zipkero/agent-runtime/internal/message"
+	"github.com/zipkero/agent-runtime/internal/tool"
 )
 
 // defaultMaxSteps 는 config에 노출하지 않는 Agent loop의 기본 step 상한이다.
 const defaultMaxSteps = 10
+
+// defaultToolTimeout 은 per-tool 실행의 기본 deadline이다(task-008에서 실제 tool 등록 전까지
+// 빈 registry와 함께 쓰인다).
+const defaultToolTimeout = 30 * time.Second
 
 func main() {
 	cfg, err := config.Load()
@@ -40,7 +46,9 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), cfg.Timeout)
 	defer cancel()
 
-	code := run(ctx, client, cfg.Model, prompt, defaultMaxSteps)
+	// task-008에서 실제 tool을 등록한다. 현재는 빈 registry와 기본 timeout으로 컴파일만 통과시킨다.
+	registry := tool.NewRegistry()
+	code := run(ctx, client, cfg.Model, prompt, defaultMaxSteps, registry, defaultToolTimeout)
 	os.Exit(code)
 }
 
@@ -62,8 +70,8 @@ func readPrompt() (string, error) {
 // final이면 최종 답을 stdout에 출력하고 0을 반환한다.
 // error·ctx 취소이면 원인을 stderr에 쓰고 1을 반환한다.
 // max step 초과이면 "max step 초과" 문구를 stderr에 쓰고 1을 반환한다.
-func run(ctx context.Context, client llm.LLMClient, model, prompt string, maxSteps int) int {
-	a := agent.NewAgent(client, model, maxSteps, nil)
+func run(ctx context.Context, client llm.LLMClient, model, prompt string, maxSteps int, registry *tool.Registry, toolTimeout time.Duration) int {
+	a := agent.NewAgent(client, model, maxSteps, nil, registry, toolTimeout)
 	state := a.Run(ctx, prompt)
 
 	switch state.Status {

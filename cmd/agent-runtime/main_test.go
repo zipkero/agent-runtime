@@ -11,6 +11,7 @@ import (
 
 	"github.com/zipkero/agent-runtime/internal/llm"
 	"github.com/zipkero/agent-runtime/internal/message"
+	"github.com/zipkero/agent-runtime/internal/tool"
 )
 
 // captureStdout 은 f 실행 동안 os.Stdout으로 쓴 내용을 캡처한다.
@@ -60,7 +61,7 @@ func TestRun_TextResponse_Final(t *testing.T) {
 
 	var code int
 	out := captureStdout(t, func() {
-		code = run(context.Background(), stub, "claude-3-5-haiku-20241022", "안녕", 5)
+		code = run(context.Background(), stub, "claude-3-5-haiku-20241022", "안녕", 5, tool.NewRegistry(), 0)
 	})
 
 	if code != 0 {
@@ -96,7 +97,7 @@ func TestRun_MaxSteps_WritesToStderrAndExitsNonZero(t *testing.T) {
 	var code int
 	errOut := captureStderr(t, func() {
 		// maxSteps=2로 빠르게 소진한다.
-		code = run(context.Background(), stub, "claude-3-5-haiku-20241022", "검색해줘", 2)
+		code = run(context.Background(), stub, "claude-3-5-haiku-20241022", "검색해줘", 2, tool.NewRegistry(), 0)
 	})
 
 	if code == 0 {
@@ -115,7 +116,7 @@ func TestRun_ChatError_WritesToStderrAndExitsNonZero(t *testing.T) {
 
 	var code int
 	errOut := captureStderr(t, func() {
-		code = run(context.Background(), stub, "claude-3-5-haiku-20241022", "안녕", 5)
+		code = run(context.Background(), stub, "claude-3-5-haiku-20241022", "안녕", 5, tool.NewRegistry(), 0)
 	})
 
 	if code == 0 {
@@ -139,7 +140,7 @@ func TestRun_ContextCanceled_WritesToStderrAndExitsNonZero(t *testing.T) {
 
 	var code int
 	errOut := captureStderr(t, func() {
-		code = run(ctx, stub, "claude-3-5-haiku-20241022", "안녕", 5)
+		code = run(ctx, stub, "claude-3-5-haiku-20241022", "안녕", 5, tool.NewRegistry(), 0)
 	})
 
 	if code == 0 {

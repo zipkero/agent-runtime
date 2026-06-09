@@ -4,9 +4,11 @@ package agent
 
 import (
 	"context"
+	"time"
 
 	"github.com/zipkero/agent-runtime/internal/llm"
 	"github.com/zipkero/agent-runtime/internal/message"
+	"github.com/zipkero/agent-runtime/internal/tool"
 )
 
 // Status 는 AgentState가 놓인 종료 종류를 하나의 명시적 값으로 구분한다.
@@ -55,20 +57,26 @@ type ReflectionHook func(step int, state AgentState)
 
 // Agent 는 주입된 LLMClient를 들고 AgentState 위에서 ReAct loop를 실행하는 단위다.
 type Agent struct {
-	client   llm.LLMClient
-	model    string
-	maxSteps int
-	hook     ReflectionHook
+	client      llm.LLMClient
+	model       string
+	maxSteps    int
+	hook        ReflectionHook
+	registry    *tool.Registry  // tool 이름 조회와 schema 수집에 사용한다. nil이면 tool 미사용.
+	toolTimeout time.Duration   // per-tool 실행 deadline. 0이면 context 상속만 따른다.
 }
 
 // NewAgent 는 Agent를 생성한다.
 // hook이 nil이면 step 경계에서 아무 동작도 하지 않는다(no-op).
-func NewAgent(client llm.LLMClient, model string, maxSteps int, hook ReflectionHook) *Agent {
+// registry가 nil이면 tool schema를 LLM에 싣지 않고 tool_call 결과도 처리하지 않는다.
+// toolTimeout이 0이면 per-tool deadline을 별도로 적용하지 않는다(loop ctx 상속만).
+func NewAgent(client llm.LLMClient, model string, maxSteps int, hook ReflectionHook, registry *tool.Registry, toolTimeout time.Duration) *Agent {
 	return &Agent{
-		client:   client,
-		model:    model,
-		maxSteps: maxSteps,
-		hook:     hook,
+		client:      client,
+		model:       model,
+		maxSteps:    maxSteps,
+		hook:        hook,
+		registry:    registry,
+		toolTimeout: toolTimeout,
 	}
 }
 

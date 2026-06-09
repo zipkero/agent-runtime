@@ -71,7 +71,7 @@ ROADMAP Phase 3(Tool Calling Runtime) 실행 체크리스트다. analysis.md의 
 
 ## Section: internal/agent — loop의 tool 실행 통합
 
-- [ ] task-006: Agent가 registry와 tool timeout을 생성 시 주입받도록 생성 표면을 넓힌다.
+- [x] task-006: Agent가 registry와 tool timeout을 생성 시 주입받도록 생성 표면을 넓힌다.
   - 목적: Agent가 tool registry와 실행 timeout을 들고 동작하도록 만든다.
   - 접근: `Agent` 구조체에 registry(또는 dispatcher) 필드와 tool timeout 필드를 추가하고, `NewAgent`에 두 인자를 더한다
     (D3 옵션 A, D5). `Run` 시그니처는 바꾸지 않는다(`(ctx, prompt)` 유지). 이 시그니처 변경의 ripple로 `agent_test.go`의

@@ -9,6 +9,7 @@ import (
 	"github.com/zipkero/agent-runtime/internal/agent"
 	"github.com/zipkero/agent-runtime/internal/llm"
 	"github.com/zipkero/agent-runtime/internal/message"
+	"github.com/zipkero/agent-runtime/internal/tool"
 )
 
 // seqStub 은 step마다 다른 응답을 순서대로 반환하는 다단계 LLMClient 구현체다.
@@ -82,7 +83,7 @@ func TestRun_NormalExit(t *testing.T) {
 	stub := &seqStub{
 		responses: []llm.ChatResponse{textResponse(replyText)},
 	}
-	a := agent.NewAgent(stub, "stub-model", 5, nil)
+	a := agent.NewAgent(stub, "stub-model", 5, nil, tool.NewRegistry(), 0)
 
 	state := a.Run(context.Background(), promptText)
 
@@ -133,7 +134,7 @@ func TestRun_MaxSteps(t *testing.T) {
 	stub := &seqStub{
 		responses: []llm.ChatResponse{toolCallResponse()},
 	}
-	a := agent.NewAgent(stub, "stub-model", maxSteps, nil)
+	a := agent.NewAgent(stub, "stub-model", maxSteps, nil, tool.NewRegistry(), 0)
 
 	state := a.Run(context.Background(), "반복 tool_call 프롬프트")
 
@@ -173,7 +174,7 @@ func TestRun_ErrorExit(t *testing.T) {
 	sentinelErr := errors.New("LLM 호출 실패")
 
 	stub := &seqStub{err: sentinelErr}
-	a := agent.NewAgent(stub, "stub-model", 5, nil)
+	a := agent.NewAgent(stub, "stub-model", 5, nil, tool.NewRegistry(), 0)
 
 	state := a.Run(context.Background(), "에러 케이스 프롬프트")
 
@@ -216,7 +217,7 @@ func TestRun_HookObservation(t *testing.T) {
 		records = append(records, hookRecord{step: step, steps: state.Steps})
 	}
 
-	a := agent.NewAgent(stub, "stub-model", 5, hook)
+	a := agent.NewAgent(stub, "stub-model", 5, hook, tool.NewRegistry(), 0)
 	state := a.Run(context.Background(), "hook 관찰 프롬프트")
 
 	// 정상 종료 확인
