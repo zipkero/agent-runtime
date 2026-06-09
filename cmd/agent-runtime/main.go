@@ -20,8 +20,7 @@ import (
 // defaultMaxSteps 는 config에 노출하지 않는 Agent loop의 기본 step 상한이다.
 const defaultMaxSteps = 10
 
-// defaultToolTimeout 은 per-tool 실행의 기본 deadline이다(task-008에서 실제 tool 등록 전까지
-// 빈 registry와 함께 쓰인다).
+// defaultToolTimeout 은 per-tool 실행의 기본 deadline이다.
 const defaultToolTimeout = 30 * time.Second
 
 func main() {
@@ -46,10 +45,43 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), cfg.Timeout)
 	defer cancel()
 
-	// task-008에서 실제 tool을 등록한다. 현재는 빈 registry와 기본 timeout으로 컴파일만 통과시킨다.
-	registry := tool.NewRegistry()
+	// file read의 base 경로는 CLI 실행 시점의 작업 디렉터리로 고정한다.
+	// os.Getwd() 실패 시 비정상 종료한다.
+	workDir, err := os.Getwd()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "작업 디렉터리 조회 실패: %v\n", err)
+		os.Exit(1)
+	}
+
+	registry, err := buildRegistry(workDir)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "tool 등록 실패: %v\n", err)
+		os.Exit(1)
+	}
+
 	code := run(ctx, client, cfg.Model, prompt, defaultMaxSteps, registry, defaultToolTimeout)
 	os.Exit(code)
+}
+
+// buildRegistry 는 calculator와 file read tool을 등록한 Registry를 생성한다.
+// fileBase는 file read tool의 허용 범위 루트 디렉터리다.
+// 등록 실패(충돌 또는 base 경로 오류) 시 error를 반환한다.
+func buildRegistry(fileBase string) (*tool.Registry, error) {
+	reg := tool.NewRegistry()
+
+	if err := reg.Register(&tool.Calculator{}); err != nil {
+		return nil, fmt.Errorf("calculator 등록 실패: %w", err)
+	}
+
+	fr, err := tool.NewFileRead(fileBase)
+	if err != nil {
+		return nil, fmt.Errorf("file_read 생성 실패: %w", err)
+	}
+	if err := reg.Register(fr); err != nil {
+		return nil, fmt.Errorf("file_read 등록 실패: %w", err)
+	}
+
+	return reg, nil
 }
 
 // readPrompt 는 stdin을 EOF까지 읽어 전체 입력을 하나의 프롬프트로 합쳐 반환한다.

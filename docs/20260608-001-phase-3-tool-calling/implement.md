@@ -101,7 +101,7 @@ ROADMAP Phase 3(Tool Calling Runtime) 실행 체크리스트다. analysis.md의 
 
 ## Section: CLI 통합
 
-- [ ] task-008: CLI가 registry를 구성·tool 등록 후 Agent에 주입해 end-to-end tool calling 경로를 성립시킨다.
+- [x] task-008: CLI가 registry를 구성·tool 등록 후 Agent에 주입해 end-to-end tool calling 경로를 성립시킨다.
   - 목적: CLI로 실행되는 Agent가 등록된 tool과 schema를 갖춘 채 사용자 입력을 tool calling을 거쳐 최종 응답까지 처리한다.
   - 접근: `cmd/agent-runtime/main.go`의 `run`에서 `tool.Registry`를 만들고 calculator·file read tool을 등록한 뒤
     `NewAgent`에 주입한다(SPEC §5.11). tool timeout 기본값은 `defaultMaxSteps`(:19)와 같은 패턴으로 CLI 기본 상수
