@@ -61,8 +61,9 @@ type Agent struct {
 	model       string
 	maxSteps    int
 	hook        ReflectionHook
-	registry    *tool.Registry  // tool 이름 조회와 schema 수집에 사용한다. nil이면 tool 미사용.
-	toolTimeout time.Duration   // per-tool 실행 deadline. 0이면 context 상속만 따른다.
+	registry    *tool.Registry     // tool 이름 조회와 schema 수집에 사용한다. nil이면 tool 미사용.
+	toolTimeout time.Duration      // per-tool 실행 deadline. 0이면 context 상속만 따른다.
+	dispatcher  *tool.Dispatcher   // registry가 non-nil일 때 생성되며 tool_call 실행을 위임한다.
 }
 
 // NewAgent 는 Agent를 생성한다.
@@ -70,7 +71,7 @@ type Agent struct {
 // registry가 nil이면 tool schema를 LLM에 싣지 않고 tool_call 결과도 처리하지 않는다.
 // toolTimeout이 0이면 per-tool deadline을 별도로 적용하지 않는다(loop ctx 상속만).
 func NewAgent(client llm.LLMClient, model string, maxSteps int, hook ReflectionHook, registry *tool.Registry, toolTimeout time.Duration) *Agent {
-	return &Agent{
+	a := &Agent{
 		client:      client,
 		model:       model,
 		maxSteps:    maxSteps,
@@ -78,6 +79,12 @@ func NewAgent(client llm.LLMClient, model string, maxSteps int, hook ReflectionH
 		registry:    registry,
 		toolTimeout: toolTimeout,
 	}
+	// registry가 non-nil인 경우에만 dispatcher를 초기화한다.
+	// nil registry는 기존 동작(tool 미사용)을 그대로 보존한다.
+	if registry != nil {
+		a.dispatcher = tool.NewDispatcher(registry, toolTimeout)
+	}
+	return a
 }
 
 // Run 은 사용자 입력(prompt)을 첫 메시지로 ReAct loop를 실행하고,
@@ -108,11 +115,16 @@ func (a *Agent) Run(ctx context.Context, prompt string) AgentState {
 			return state
 		}
 
-		// (4) LLM 호출 — ctx를 그대로 전파하고, 에러는 state에 흡수
-		resp, err := a.client.Chat(ctx, llm.ChatRequest{
+		// (4) LLM 호출 — ctx를 그대로 전파하고, 에러는 state에 흡수.
+		// registry가 non-nil이면 등록된 tool schema를 요청에 포함해 tool_call 생성을 유도한다.
+		req := llm.ChatRequest{
 			Model:    a.model,
 			Messages: state.Messages,
-		})
+		}
+		if a.registry != nil {
+			req.Tools = a.registry.Specs()
+		}
+		resp, err := a.client.Chat(ctx, req)
 		if err != nil {
 			state.Status = StatusError
 			state.Err = err
@@ -123,11 +135,31 @@ func (a *Agent) Run(ctx context.Context, prompt string) AgentState {
 		state.Messages = append(state.Messages, resp.Message)
 		state.Steps++
 
-		// (6) 종료 판정 — tool_call이 없으면 final, 있으면 running 유지(미실행, 신호로만)
+		// (6) 종료 판정 — tool_call이 없으면 final.
+		// tool_call이 있고 dispatcher가 준비돼 있으면 등장 순서대로 순차 실행하고
+		// 결과를 RoleTool 메시지로 누적한 뒤 다음 회전으로 넘어간다(SPEC §5.4).
+		// dispatcher가 nil(registry 미주입)이면 기존처럼 신호로만 취급한다.
 		if !resp.Message.HasToolCalls() {
 			state.Status = StatusFinal
 			return state
 		}
-		// tool_call이 있으면 running 유지하며 다음 회전으로
+		if a.dispatcher != nil {
+			// tool_call 블록을 등장 순서대로 순차 실행한다.
+			// 각 ToolResult를 NewToolResultBlock으로 감싸 단일 RoleTool 메시지로 누적한다.
+			var resultBlocks []message.ContentBlock
+			for _, block := range resp.Message.Content {
+				if block.Type == message.BlockTypeToolCall && block.ToolCall != nil {
+					result := a.dispatcher.Dispatch(ctx, *block.ToolCall)
+					resultBlocks = append(resultBlocks, message.NewToolResultBlock(result))
+				}
+			}
+			if len(resultBlocks) > 0 {
+				state.Messages = append(state.Messages, message.Message{
+					Role:    message.RoleTool,
+					Content: resultBlocks,
+				})
+			}
+		}
+		// tool 실행 완료(또는 dispatcher 미주입) — running 유지하며 다음 회전으로
 	}
 }

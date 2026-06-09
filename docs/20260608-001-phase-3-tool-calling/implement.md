@@ -83,7 +83,7 @@ ROADMAP Phase 3(Tool Calling Runtime) 실행 체크리스트다. analysis.md의 
       HookObservation 4 케이스 그대로 통과). LLM 호출 횟수 ≤ maxSteps 불변식(agent_test.go:155 핵심 단언)이 보존됨.
   - 참조: SPEC §5.4 / ANALYSIS §4, D3, D5, D8
 
-- [ ] task-007: loop가 tool_call 응답을 실제로 실행하고 결과를 누적해 다음 회전으로 잇도록 단계 (4)·(6)을 확장한다.
+- [x] task-007: loop가 tool_call 응답을 실제로 실행하고 결과를 누적해 다음 회전으로 잇도록 단계 (4)·(6)을 확장한다.
   - 목적: assistant가 tool_call을 요청하면 그 tool을 실행해 결과를 대화에 누적하고, 모델이 결과를 본 뒤 이어서 판단한다.
   - 접근: `agent.go`의 LLM 호출 단계(:104)에서 `llm.ChatRequest`의 `Tools`를 `registry.Specs()`로 채운다(SPEC §5.3·§5.11).
     tool_call 분기(:118~123)에서 신호 취급을 멈추고, assistant 응답의 `BlockTypeToolCall` 블록을 등장 순서대로 하나씩
