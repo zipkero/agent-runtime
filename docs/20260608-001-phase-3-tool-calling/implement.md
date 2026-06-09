@@ -45,7 +45,7 @@ ROADMAP Phase 3(Tool Calling Runtime) 실행 체크리스트다. analysis.md의 
       아니라 IsError 결과가 됨), 성공 tool은 IsError=false에 ToolCallID가 대응 call.ID와 일치함. `go test ./internal/tool/...` 통과.
   - 참조: SPEC §5.6, SPEC §5.7, SPEC §5.8 / ANALYSIS §2, §3, D2, D4, D5, D6
 
-- [ ] task-004: 산술 입력을 받아 계산 결과를 돌려주는 calculator tool을 구현한다.
+- [x] task-004: 산술 입력을 받아 계산 결과를 돌려주는 calculator tool을 구현한다.
   - 목적: 산술 요청에 대해 계산된 값을 결과로 반환한다.
   - 접근: `internal/tool`에 `Tool`을 구현하는 calculator를 둔다. `Spec()`은 이름·설명·InputSchema(입력 형태를 LLM에 알리는
     용도, SPEC §5.3)를 반환한다. `Execute`는 진입 직후 입력을 unmarshal하고 필드를 검증해(예: `{op, a, b}` 또는
