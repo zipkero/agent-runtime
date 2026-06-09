@@ -57,7 +57,7 @@ ROADMAP Phase 3(Tool Calling Runtime) 실행 체크리스트다. analysis.md의 
       `go test ./internal/tool/...` 통과.
   - 참조: SPEC §5.9 / ANALYSIS §1, D1, D4, D9
 
-- [ ] task-005: 허용된 base 경로 하위 파일만 읽는 file read tool을 구현한다.
+- [x] task-005: 허용된 base 경로 하위 파일만 읽는 file read tool을 구현한다.
   - 목적: 허용 범위 안의 파일 내용을 반환하고, 범위 밖 경로나 없는 파일은 거부한다.
   - 접근: `internal/tool`에 `Tool`을 구현하는 file read를 둔다. base 디렉터리를 생성 시 고정 인자로 받고(D9 옵션 A),
     `Execute`는 `{"path":"..."}`를 unmarshal한 뒤 입력 경로를 base 기준으로 정규화(`filepath.Clean`/`filepath.Abs`)하고
