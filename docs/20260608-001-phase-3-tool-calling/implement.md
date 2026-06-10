@@ -115,7 +115,7 @@ ROADMAP Phase 3(Tool Calling Runtime) 실행 체크리스트다. analysis.md의 
 
 ## Section: 결정적 multi-step 검증
 
-- [ ] task-009: stub client와 등록 tool만으로 multi-step tool calling 경로와 관찰 가능한 실패 케이스를 결정적으로 검증한다.
+- [x] task-009: stub client와 등록 tool만으로 multi-step tool calling 경로와 관찰 가능한 실패 케이스를 결정적으로 검증한다.
   - 목적: 실제 API 없이 tool 실행 → 결과 누적 → 최종 답 도달 경로와, unknown/검증 실패가 loop를 깨지 않음을 한 테스트군으로 관찰한다.
   - 접근: `internal/agent`(또는 신규 테스트 파일)에서 기존 `seqStub` 패턴(agent_test.go:16~42)을 그대로 재사용한다(D10,
     `internal/llm` 미변경). in-test registry에 실제 calculator/file read(또는 결정적 fake) tool을 등록하고, stub이 1회전에

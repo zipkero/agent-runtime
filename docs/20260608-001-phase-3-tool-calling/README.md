@@ -9,7 +9,7 @@ Phase 2에서 신호로만 남겨 둔 tool_call 응답을 실제 실행·결과 
 
 - [x] SPEC
 - [x] ANALYSIS
-- [ ] IMPLEMENT
+- [x] IMPLEMENT
 
 ## 문서
 
@@ -22,3 +22,4 @@ Phase 2에서 신호로만 남겨 둔 tool_call 응답을 실제 실행·결과 
 - 2026-06-08: SPEC 작성
 - 2026-06-08: ANALYSIS 작성
 - 2026-06-08: IMPLEMENT 체크리스트 작성
+- 2026-06-10: IMPLEMENT 완료
