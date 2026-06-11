@@ -2,7 +2,7 @@
 
 ## 체크리스트
 
-- [ ] task-001: generic graph core와 정적 edge 실행
+- [x] task-001: generic graph core와 정적 edge 실행
   - 목적: 호출자가 시작 node와 node 집합을 가진 graph를 실행하고, 정적 edge 순서대로 변경된 최종 state와
     종료 상태를 확인할 수 있게 한다.
   - 접근: `internal/graph`에 generic `Graph[S]`, `Node[S]`, `NodeResult[S]`, `Reducer[S]`, `Router[S]`,
