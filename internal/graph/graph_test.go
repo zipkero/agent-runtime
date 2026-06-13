@@ -158,6 +158,91 @@ func TestReducerPropagation(t *testing.T) {
 	}
 }
 
+// TestConditionalRouterExecution 은 reducer 반영 이후의 최신 state를 기준으로
+// 같은 graph가 서로 다른 다음 node 또는 end를 선택하는지 검증한다.
+func TestConditionalRouterExecution(t *testing.T) {
+	nodes := map[graph.NodeID]graph.Node[intState]{
+		"start":    &appendNode{name: "start", delta: 1},
+		"positive": &appendNode{name: "positive", delta: 10},
+		"negative": &appendNode{name: "negative", delta: -10},
+	}
+	router := graph.NewConditionalRouter[intState](func(current graph.NodeID, state intState) (graph.NodeID, error) {
+		switch current {
+		case "start":
+			if state.value > 0 {
+				return "positive", nil
+			}
+			if state.value < 0 {
+				return "negative", nil
+			}
+			return graph.End, nil
+		case "positive", "negative":
+			return graph.End, nil
+		default:
+			return "", errors.New("unexpected node")
+		}
+	})
+
+	g, err := graph.New[intState]("start", nodes, router, graph.ReplaceReducer[intState]{}, 10)
+	if err != nil {
+		t.Fatalf("graph.New 실패: %v", err)
+	}
+
+	tests := []struct {
+		name      string
+		initial   intState
+		wantValue int
+		wantOrder []string
+		wantSteps int
+	}{
+		{
+			name:      "positive path",
+			initial:   intState{value: 1},
+			wantValue: 12,
+			wantOrder: []string{"start", "positive"},
+			wantSteps: 2,
+		},
+		{
+			name:      "negative path",
+			initial:   intState{value: -2},
+			wantValue: -11,
+			wantOrder: []string{"start", "negative"},
+			wantSteps: 2,
+		},
+		{
+			name:      "end path",
+			initial:   intState{value: -1},
+			wantValue: 0,
+			wantOrder: []string{"start"},
+			wantSteps: 1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := g.Run(context.Background(), tt.initial)
+
+			if result.Status != graph.StatusCompleted {
+				t.Errorf("status: got %q, want %q", result.Status, graph.StatusCompleted)
+			}
+			if result.State.value != tt.wantValue {
+				t.Errorf("final state.value: got %d, want %d", result.State.value, tt.wantValue)
+			}
+			if result.Steps != tt.wantSteps {
+				t.Errorf("steps: got %d, want %d", result.Steps, tt.wantSteps)
+			}
+			if len(result.State.order) != len(tt.wantOrder) {
+				t.Fatalf("order length: got %d, want %d", len(result.State.order), len(tt.wantOrder))
+			}
+			for i, name := range tt.wantOrder {
+				if result.State.order[i] != name {
+					t.Errorf("order[%d]: got %q, want %q", i, result.State.order[i], name)
+				}
+			}
+		})
+	}
+}
+
 // TestMaxStepsHalt 는 max steps에 도달하면 다음 node를 실행하지 않고 max_steps 상태를 반환하는지 단언한다.
 func TestMaxStepsHalt(t *testing.T) {
 	// 항상 자기 자신으로 돌아오는 loop node

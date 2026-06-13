@@ -34,8 +34,8 @@ const (
 type Result[S any] struct {
 	State   S
 	Status  Status
-	Steps   int      // 실행된 node 횟수
-	Current NodeID   // 마지막으로 실행된 node (또는 실행 중단 시점의 node)
+	Steps   int    // 실행된 node 횟수
+	Current NodeID // 마지막으로 실행된 node (또는 실행 중단 시점의 node)
 	Err     error
 }
 
@@ -88,6 +88,23 @@ func (r *StaticRouter[S]) Next(current NodeID, _ S) (NodeID, error) {
 		return "", fmt.Errorf("graph: no edge from node %q", current)
 	}
 	return next, nil
+}
+
+// ConditionalRouter 는 현재 node와 최신 state를 함수에 위임해 다음 node를 결정하는 router다.
+type ConditionalRouter[S any] struct {
+	route func(current NodeID, state S) (NodeID, error)
+}
+
+// NewConditionalRouter 는 조건부 routing 함수로 ConditionalRouter를 생성한다.
+func NewConditionalRouter[S any](route func(current NodeID, state S) (NodeID, error)) *ConditionalRouter[S] {
+	return &ConditionalRouter[S]{route: route}
+}
+
+func (r *ConditionalRouter[S]) Next(current NodeID, state S) (NodeID, error) {
+	if r.route == nil {
+		return "", errors.New("graph: conditional router function must not be nil")
+	}
+	return r.route(current, state)
 }
 
 // Graph 는 시작 node, node 집합, router, reducer, max steps를 가진 실행 가능한 graph다.

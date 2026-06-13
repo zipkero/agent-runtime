@@ -14,7 +14,7 @@
       `go test ./internal/graph`가 통과한다.
   - 참조: SPEC §5.1, SPEC §5.2, SPEC §5.3, SPEC §5.11, ANALYSIS §1, ANALYSIS §3, ANALYSIS D1, ANALYSIS D2
 
-- [ ] task-002: conditional router 실행
+- [x] task-002: conditional router 실행
   - 목적: graph가 reducer 반영 이후의 최신 state를 기준으로 다음 node 또는 종료를 선택할 수 있게 한다.
   - 접근: `internal/graph`에 `Router[S]` 공통 표면을 따르는 conditional router adapter를 추가하고, 정적
     edge router와 같은 graph execution loop에서 사용한다.
