@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/zipkero/agent-runtime/internal/graph"
 )
@@ -245,15 +246,25 @@ func TestConditionalRouterExecution(t *testing.T) {
 
 // TestMaxStepsHalt 는 max steps에 도달하면 다음 node를 실행하지 않고 max_steps 상태를 반환하는지 단언한다.
 func TestMaxStepsHalt(t *testing.T) {
-	// 항상 자기 자신으로 돌아오는 loop node
-	selfLoop := nodeFunc[intState](func(_ context.Context, s intState) (graph.NodeResult[intState], error) {
+	executed := 0
+	first := nodeFunc[intState](func(_ context.Context, s intState) (graph.NodeResult[intState], error) {
+		executed++
 		return graph.NodeResult[intState]{Update: intState{value: s.value + 1}}, nil
 	})
-	nodes := map[graph.NodeID]graph.Node[intState]{"loop": selfLoop}
-	router := graph.NewStaticRouter[intState](map[graph.NodeID]graph.NodeID{
-		"loop": "loop",
+	blocked := nodeFunc[intState](func(_ context.Context, s intState) (graph.NodeResult[intState], error) {
+		executed++
+		t.Fatal("max steps 도달 이후 다음 node가 실행되면 안 된다")
+		return graph.NodeResult[intState]{Update: s}, nil
 	})
-	g, err := graph.New[intState]("loop", nodes, router, graph.ReplaceReducer[intState]{}, 3)
+	nodes := map[graph.NodeID]graph.Node[intState]{
+		"first":   first,
+		"blocked": blocked,
+	}
+	router := graph.NewStaticRouter[intState](map[graph.NodeID]graph.NodeID{
+		"first":   "blocked",
+		"blocked": graph.End,
+	})
+	g, err := graph.New[intState]("first", nodes, router, graph.ReplaceReducer[intState]{}, 1)
 	if err != nil {
 		t.Fatalf("graph.New 실패: %v", err)
 	}
@@ -263,9 +274,14 @@ func TestMaxStepsHalt(t *testing.T) {
 	if result.Status != graph.StatusMaxSteps {
 		t.Errorf("status: got %q, want %q", result.Status, graph.StatusMaxSteps)
 	}
-	// maxSteps=3이므로 3번 실행된 뒤 멈춘다.
-	if result.Steps != 3 {
-		t.Errorf("steps: got %d, want 3", result.Steps)
+	if result.Steps != 1 {
+		t.Errorf("steps: got %d, want 1", result.Steps)
+	}
+	if executed != 1 {
+		t.Errorf("executed: got %d, want 1", executed)
+	}
+	if result.State.value != 1 {
+		t.Errorf("final state.value: got %d, want 1", result.State.value)
 	}
 }
 
@@ -294,6 +310,40 @@ func TestNodeErrorHalt(t *testing.T) {
 	}
 }
 
+// TestContextErrorFromNodeHalt 는 node가 context error를 반환하면 canceled 상태와 원인 error를 보존하는지 단언한다.
+func TestContextErrorFromNodeHalt(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+	}{
+		{name: "canceled", err: context.Canceled},
+		{name: "deadline", err: context.DeadlineExceeded},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctxNode := nodeFunc[intState](func(_ context.Context, s intState) (graph.NodeResult[intState], error) {
+				return graph.NodeResult[intState]{}, tt.err
+			})
+			nodes := map[graph.NodeID]graph.Node[intState]{"ctx": ctxNode}
+			router := graph.NewStaticRouter[intState](map[graph.NodeID]graph.NodeID{"ctx": graph.End})
+			g, err := graph.New[intState]("ctx", nodes, router, graph.ReplaceReducer[intState]{}, 10)
+			if err != nil {
+				t.Fatalf("graph.New 실패: %v", err)
+			}
+
+			result := g.Run(context.Background(), intState{value: 0})
+
+			if result.Status != graph.StatusCanceled {
+				t.Errorf("status: got %q, want %q", result.Status, graph.StatusCanceled)
+			}
+			if !errors.Is(result.Err, tt.err) {
+				t.Errorf("Err: got %v, want %v", result.Err, tt.err)
+			}
+		})
+	}
+}
+
 // TestContextCanceledHalt 는 취소된 context로 실행하면 canceled 상태를 반환하는지 단언한다.
 func TestContextCanceledHalt(t *testing.T) {
 	normalNode := nodeFunc[intState](func(_ context.Context, s intState) (graph.NodeResult[intState], error) {
@@ -313,6 +363,34 @@ func TestContextCanceledHalt(t *testing.T) {
 
 	if result.Status != graph.StatusCanceled {
 		t.Errorf("status: got %q, want %q", result.Status, graph.StatusCanceled)
+	}
+	if !errors.Is(result.Err, context.Canceled) {
+		t.Errorf("Err: got %v, want %v", result.Err, context.Canceled)
+	}
+}
+
+// TestContextDeadlineHalt 는 deadline이 지난 context로 실행하면 canceled 상태와 deadline error를 반환하는지 단언한다.
+func TestContextDeadlineHalt(t *testing.T) {
+	normalNode := nodeFunc[intState](func(_ context.Context, s intState) (graph.NodeResult[intState], error) {
+		return graph.NodeResult[intState]{Update: s}, nil
+	})
+	nodes := map[graph.NodeID]graph.Node[intState]{"n": normalNode}
+	router := graph.NewStaticRouter[intState](map[graph.NodeID]graph.NodeID{"n": "n"})
+	g, err := graph.New[intState]("n", nodes, router, graph.ReplaceReducer[intState]{}, 100)
+	if err != nil {
+		t.Fatalf("graph.New 실패: %v", err)
+	}
+
+	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
+	defer cancel()
+
+	result := g.Run(ctx, intState{value: 0})
+
+	if result.Status != graph.StatusCanceled {
+		t.Errorf("status: got %q, want %q", result.Status, graph.StatusCanceled)
+	}
+	if !errors.Is(result.Err, context.DeadlineExceeded) {
+		t.Errorf("Err: got %v, want %v", result.Err, context.DeadlineExceeded)
 	}
 }
 

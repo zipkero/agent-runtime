@@ -25,7 +25,7 @@
       `go test ./internal/graph`가 통과한다.
   - 참조: SPEC §5.4, SPEC §5.11, ANALYSIS §1, ANALYSIS §2, ANALYSIS §3
 
-- [ ] task-003: graph max steps, node error, context 취소 처리
+- [x] task-003: graph max steps, node error, context 취소 처리
   - 목적: graph 실행이 무한 loop, node error, context 취소 상황에서 panic 없이 구분 가능한 결과로 멈추게
     한다.
   - 접근: graph execution loop에 node 실행 횟수 기준 max steps 선검사, node error result, context
