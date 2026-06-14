@@ -2,7 +2,7 @@
 
 ## 체크리스트
 
-- [ ] task-001: Tavily Web Search Tool
+- [x] task-001: Tavily Web Search Tool
   - 목적: Agent가 `web_search` tool call로 Tavily 검색을 실행하고, 검색 결과 또는 설정·API 실패를 tool
     result로 관찰할 수 있게 한다.
   - 접근: `internal/tool`에 `WebSearch`, Tavily HTTP client, 검색 입력 schema를 추가하고,

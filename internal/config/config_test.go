@@ -21,13 +21,15 @@ func writeDotEnv(t *testing.T, content string) {
 }
 
 func TestLoadReadsFromDotEnvFile(t *testing.T) {
-	writeDotEnv(t, "ANTHROPIC_API_KEY=sk-from-dotenv\nANTHROPIC_MODEL=claude-dotenv\n")
+	writeDotEnv(t, "ANTHROPIC_API_KEY=sk-from-dotenv\nANTHROPIC_MODEL=claude-dotenv\nTAVILY_API_KEY=tvly-from-dotenv\n")
 
 	// 실제 환경변수는 비워, .env 값이 채워지는지 본다.
 	t.Setenv(config.EnvAnthropicAPIKey, "placeholder")
 	os.Unsetenv(config.EnvAnthropicAPIKey)
 	t.Setenv(config.EnvModel, "placeholder")
 	os.Unsetenv(config.EnvModel)
+	t.Setenv(config.EnvTavilyAPIKey, "placeholder")
+	os.Unsetenv(config.EnvTavilyAPIKey)
 
 	cfg, err := config.Load()
 	if err != nil {
@@ -38,6 +40,9 @@ func TestLoadReadsFromDotEnvFile(t *testing.T) {
 	}
 	if cfg.Model != "claude-dotenv" {
 		t.Errorf("expected model from .env %q, got %q", "claude-dotenv", cfg.Model)
+	}
+	if cfg.TavilyAPIKey != "tvly-from-dotenv" {
+		t.Errorf("expected Tavily API key from .env %q, got %q", "tvly-from-dotenv", cfg.TavilyAPIKey)
 	}
 }
 
@@ -61,6 +66,7 @@ func TestLoadAppliesDefaultTimeout(t *testing.T) {
 	t.Setenv(config.EnvAnthropicAPIKey, "sk-ant-test")
 	t.Setenv(config.EnvModel, "claude-test-model")
 	t.Setenv(config.EnvTimeout, "")
+	t.Setenv(config.EnvTavilyAPIKey, "tvly-test")
 
 	cfg, err := config.Load()
 	if err != nil {
@@ -72,6 +78,24 @@ func TestLoadAppliesDefaultTimeout(t *testing.T) {
 	}
 	if cfg.Timeout != config.DefaultTimeout {
 		t.Errorf("expected default timeout %s, got %s", config.DefaultTimeout, cfg.Timeout)
+	}
+	if cfg.TavilyAPIKey != "tvly-test" {
+		t.Errorf("expected Tavily API key %q, got %q", "tvly-test", cfg.TavilyAPIKey)
+	}
+}
+
+func TestLoadAllowsMissingTavilyAPIKey(t *testing.T) {
+	t.Setenv(config.EnvAnthropicAPIKey, "sk-ant-test")
+	t.Setenv(config.EnvModel, "claude-test-model")
+	t.Setenv(config.EnvTimeout, "")
+	t.Setenv(config.EnvTavilyAPIKey, "")
+
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatalf("Load returned error: %v", err)
+	}
+	if cfg.TavilyAPIKey != "" {
+		t.Errorf("expected empty Tavily API key, got %q", cfg.TavilyAPIKey)
 	}
 }
 

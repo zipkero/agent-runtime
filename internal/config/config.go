@@ -14,6 +14,7 @@ const (
 	EnvAnthropicAPIKey = "ANTHROPIC_API_KEY"
 	EnvModel           = "ANTHROPIC_MODEL"
 	EnvTimeout         = "LLM_TIMEOUT"
+	EnvTavilyAPIKey    = "TAVILY_API_KEY"
 
 	DefaultTimeout = 30 * time.Second
 )
@@ -23,6 +24,7 @@ type Config struct {
 	AnthropicAPIKey string
 	Model           string
 	Timeout         time.Duration
+	TavilyAPIKey    string
 }
 
 // Load 는 환경변수에서 Config를 읽는다.
@@ -50,6 +52,7 @@ func Load() (Config, error) {
 		AnthropicAPIKey: apiKey,
 		Model:           model,
 		Timeout:         timeout,
+		TavilyAPIKey:    strings.TrimSpace(os.Getenv(EnvTavilyAPIKey)),
 	}, nil
 }
 
