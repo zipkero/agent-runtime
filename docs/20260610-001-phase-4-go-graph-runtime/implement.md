@@ -50,7 +50,7 @@
   - 참조: SPEC §5.8, SPEC §5.9, SPEC §5.11, ANALYSIS §1, ANALYSIS §2, ANALYSIS §3, ANALYSIS §4,
     ANALYSIS D3, ANALYSIS D4, ANALYSIS D5, ANALYSIS D6
 
-- [ ] task-005: CLI 관찰 동작 회귀 확인
+- [x] task-005: CLI 관찰 동작 회귀 확인
   - 목적: graph 도입 후에도 CLI 사용자는 기존과 같이 최종 답은 stdout으로, max step과 실행 에러는 stderr와
     비정상 종료코드로 확인할 수 있게 한다.
   - 접근: `cmd/agent-runtime`의 `run` 상태 분기 계약을 유지하고, graph 기반 `Agent.Run` 결과가 기존

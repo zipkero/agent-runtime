@@ -14,6 +14,42 @@ import (
 	"github.com/zipkero/agent-runtime/internal/tool"
 )
 
+type cliSeqStub struct {
+	responses []llm.ChatResponse
+	calls     int
+}
+
+func (s *cliSeqStub) Chat(ctx context.Context, _ llm.ChatRequest) (llm.ChatResponse, error) {
+	if err := ctx.Err(); err != nil {
+		return llm.ChatResponse{}, err
+	}
+	idx := s.calls
+	if idx >= len(s.responses) {
+		idx = len(s.responses) - 1
+	}
+	s.calls++
+	return s.responses[idx], nil
+}
+
+type cliFakeTool struct {
+	name   string
+	result string
+	calls  int
+}
+
+func (f *cliFakeTool) Spec() message.ToolSpec {
+	return message.ToolSpec{
+		Name:        f.name,
+		Description: f.name + " 테스트용 tool",
+		InputSchema: json.RawMessage(`{"type":"object"}`),
+	}
+}
+
+func (f *cliFakeTool) Execute(_ context.Context, _ json.RawMessage) (message.ToolResult, error) {
+	f.calls++
+	return message.ToolResult{Content: f.result}, nil
+}
+
 // captureStdout 은 f 실행 동안 os.Stdout으로 쓴 내용을 캡처한다.
 // 전역 os.Stdout을 잠시 바꿔치기하므로 이 helper를 쓰는 테스트는 t.Parallel()과 함께 쓰면 안 된다.
 func captureStdout(t *testing.T, f func()) string {
@@ -72,6 +108,60 @@ func TestRun_TextResponse_Final(t *testing.T) {
 	}
 	if !contains(out, "안녕하세요") {
 		t.Errorf("응답 텍스트가 stdout에 없다: %q", out)
+	}
+}
+
+// TestRun_ToolCallingFinal_WritesFinalToStdout 는 tool call을 한 번 거친 뒤 최종 답이
+// 기존 CLI 계약처럼 stdout과 종료코드 0으로 관찰되는지 검증한다.
+func TestRun_ToolCallingFinal_WritesFinalToStdout(t *testing.T) {
+	const toolName = "lookup"
+	const finalText = "도구 결과를 반영한 최종 답"
+
+	reg := tool.NewRegistry()
+	fake := &cliFakeTool{name: toolName, result: "검색 결과"}
+	if err := reg.Register(fake); err != nil {
+		t.Fatalf("tool 등록 실패: %v", err)
+	}
+
+	stub := &cliSeqStub{
+		responses: []llm.ChatResponse{
+			{
+				Message: message.Message{
+					Role: message.RoleAssistant,
+					Content: []message.ContentBlock{
+						message.NewToolCallBlock(message.ToolCall{
+							ID:    "call_cli_001",
+							Name:  toolName,
+							Input: json.RawMessage(`{"query":"test"}`),
+						}),
+					},
+				},
+			},
+			{
+				Message: message.Message{
+					Role:    message.RoleAssistant,
+					Content: []message.ContentBlock{message.NewTextBlock(finalText)},
+				},
+			},
+		},
+	}
+
+	var code int
+	out := captureStdout(t, func() {
+		code = run(context.Background(), stub, "claude-3-5-haiku-20241022", "검색해줘", 5, reg, 0)
+	})
+
+	if code != 0 {
+		t.Fatalf("tool calling final 경로 종료코드 0 기대, 실제: %d", code)
+	}
+	if fake.calls != 1 {
+		t.Errorf("tool Execute 호출 횟수 기대값 1, 실제값 %d", fake.calls)
+	}
+	if stub.calls != 2 {
+		t.Errorf("LLM 호출 횟수 기대값 2, 실제값 %d", stub.calls)
+	}
+	if !contains(out, finalText) {
+		t.Errorf("최종 답이 stdout에 없다: %q", out)
 	}
 }
 

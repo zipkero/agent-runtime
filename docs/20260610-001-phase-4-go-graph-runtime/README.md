@@ -10,7 +10,7 @@ ROADMAP Phase 4. 현재 `Agent.Run` 안에 직접 들어 있는 실행 loop를 S
 
 - [x] SPEC
 - [x] ANALYSIS
-- [ ] IMPLEMENT
+- [x] IMPLEMENT
 
 ## 문서
 
@@ -23,3 +23,4 @@ ROADMAP Phase 4. 현재 `Agent.Run` 안에 직접 들어 있는 실행 loop를 S
 - 2026-06-10: SPEC 작성
 - 2026-06-10: ANALYSIS 작성
 - 2026-06-10: IMPLEMENT 체크리스트 작성
+- 2026-06-14: IMPLEMENT 완료
