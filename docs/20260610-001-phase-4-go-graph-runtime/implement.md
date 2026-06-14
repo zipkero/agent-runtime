@@ -37,7 +37,7 @@
       canceled/deadline context 결과를 단언하고 `go test ./internal/graph`가 통과한다.
   - 참조: SPEC §5.5, SPEC §5.6, SPEC §5.7, SPEC §5.11, ANALYSIS §2, ANALYSIS §3, ANALYSIS D3, ANALYSIS D6
 
-- [ ] task-004: Tool Calling Agent를 graph adapter로 재배치
+- [x] task-004: Tool Calling Agent를 graph adapter로 재배치
   - 목적: 기존 `Agent.Run` 호출자가 API 변경 없이 tool call 분기, tool result 누적, 최종 답 종료를 같은
     방식으로 관찰하게 한다.
   - 접근: `internal/agent`에서 `Graph[AgentState]`를 구성해 `llm_node`, `tool_node`,

@@ -6,6 +6,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/zipkero/agent-runtime/internal/graph"
 	"github.com/zipkero/agent-runtime/internal/llm"
 	"github.com/zipkero/agent-runtime/internal/message"
 	"github.com/zipkero/agent-runtime/internal/tool"
@@ -61,10 +62,15 @@ type Agent struct {
 	model       string
 	maxSteps    int
 	hook        ReflectionHook
-	registry    *tool.Registry     // tool 이름 조회와 schema 수집에 사용한다. nil이면 tool 미사용.
-	toolTimeout time.Duration      // per-tool 실행 deadline. 0이면 context 상속만 따른다.
-	dispatcher  *tool.Dispatcher   // registry가 non-nil일 때 생성되며 tool_call 실행을 위임한다.
+	registry    *tool.Registry   // tool 이름 조회와 schema 수집에 사용한다. nil이면 tool 미사용.
+	toolTimeout time.Duration    // per-tool 실행 deadline. 0이면 context 상속만 따른다.
+	dispatcher  *tool.Dispatcher // registry가 non-nil일 때 생성되며 tool_call 실행을 위임한다.
 }
+
+const (
+	agentLLMNodeID  graph.NodeID = "llm_node"
+	agentToolNodeID graph.NodeID = "tool_node"
+)
 
 // NewAgent 는 Agent를 생성한다.
 // hook이 nil이면 step 경계에서 아무 동작도 하지 않는다(no-op).
@@ -91,8 +97,7 @@ func NewAgent(client llm.LLMClient, model string, maxSteps int, hook ReflectionH
 // final/max steps/error 중 하나로 종료된 AgentState를 반환한다.
 // 에러는 두 번째 반환값으로 던지지 않고 state에 흡수된다(ctx 취소 포함).
 func (a *Agent) Run(ctx context.Context, prompt string) AgentState {
-	// (1) 초기화: user 입력을 state에 넣고 step 0, 상태 running으로 시작
-	state := AgentState{
+	initial := AgentState{
 		Messages: []message.Message{
 			{
 				Role:    message.RoleUser,
@@ -103,63 +108,128 @@ func (a *Agent) Run(ctx context.Context, prompt string) AgentState {
 		Status: StatusRunning,
 	}
 
-	for {
-		// (2) step 경계 — reflection hook 호출(nil이면 no-op)
-		if a.hook != nil {
-			a.hook(state.Steps, state)
-		}
-
-		// (3) max step 선검사 — LLM 호출 전에 상한 도달 여부를 판정
-		if state.Steps >= a.maxSteps {
-			state.Status = StatusMaxSteps
-			return state
-		}
-
-		// (4) LLM 호출 — ctx를 그대로 전파하고, 에러는 state에 흡수.
-		// registry가 non-nil이면 등록된 tool schema를 요청에 포함해 tool_call 생성을 유도한다.
-		req := llm.ChatRequest{
-			Model:    a.model,
-			Messages: state.Messages,
-		}
-		if a.registry != nil {
-			req.Tools = a.registry.Specs()
-		}
-		resp, err := a.client.Chat(ctx, req)
-		if err != nil {
-			state.Status = StatusError
-			state.Err = err
-			return state
-		}
-
-		// (5) assistant 응답 누적, step counter 증가
-		state.Messages = append(state.Messages, resp.Message)
-		state.Steps++
-
-		// (6) 종료 판정 — tool_call이 없으면 final.
-		// tool_call이 있고 dispatcher가 준비돼 있으면 등장 순서대로 순차 실행하고
-		// 결과를 RoleTool 메시지로 누적한 뒤 다음 회전으로 넘어간다(SPEC §5.4).
-		// dispatcher가 nil(registry 미주입)이면 기존처럼 신호로만 취급한다.
-		if !resp.Message.HasToolCalls() {
-			state.Status = StatusFinal
-			return state
-		}
-		if a.dispatcher != nil {
-			// tool_call 블록을 등장 순서대로 순차 실행한다.
-			// 각 ToolResult를 NewToolResultBlock으로 감싸 단일 RoleTool 메시지로 누적한다.
-			var resultBlocks []message.ContentBlock
-			for _, block := range resp.Message.Content {
-				if block.Type == message.BlockTypeToolCall && block.ToolCall != nil {
-					result := a.dispatcher.Dispatch(ctx, *block.ToolCall)
-					resultBlocks = append(resultBlocks, message.NewToolResultBlock(result))
-				}
-			}
-			if len(resultBlocks) > 0 {
-				state.Messages = append(state.Messages, message.Message{
-					Role:    message.RoleTool,
-					Content: resultBlocks,
-				})
-			}
-		}
-		// tool 실행 완료(또는 dispatcher 미주입) — running 유지하며 다음 회전으로
+	nodes := map[graph.NodeID]graph.Node[AgentState]{
+		agentLLMNodeID:  &llmNode{agent: a},
+		agentToolNodeID: &toolNode{agent: a},
 	}
+	router := graph.NewConditionalRouter[AgentState](func(current graph.NodeID, state AgentState) (graph.NodeID, error) {
+		switch current {
+		case agentLLMNodeID:
+			if state.Status != StatusRunning {
+				return graph.End, nil
+			}
+			if lastAssistantHasToolCalls(state) {
+				return agentToolNodeID, nil
+			}
+			return graph.End, nil
+		case agentToolNodeID:
+			return agentLLMNodeID, nil
+		default:
+			return graph.End, nil
+		}
+	})
+
+	g, err := graph.New[AgentState](agentLLMNodeID, nodes, router, graph.ReplaceReducer[AgentState]{}, a.graphMaxSteps())
+	if err != nil {
+		initial.Status = StatusError
+		initial.Err = err
+		return initial
+	}
+
+	result := g.Run(ctx, initial)
+	state := result.State
+	switch result.Status {
+	case graph.StatusCompleted:
+		return state
+	case graph.StatusMaxSteps:
+		state.Status = StatusMaxSteps
+		return state
+	case graph.StatusError, graph.StatusCanceled:
+		state.Status = StatusError
+		state.Err = result.Err
+		return state
+	default:
+		state.Status = StatusError
+		return state
+	}
+}
+
+func (a *Agent) graphMaxSteps() int {
+	if a.maxSteps <= 0 {
+		return 1
+	}
+	return a.maxSteps*2 + 1
+}
+
+type llmNode struct {
+	agent *Agent
+}
+
+func (n *llmNode) Run(ctx context.Context, state AgentState) (graph.NodeResult[AgentState], error) {
+	a := n.agent
+	if a.hook != nil {
+		a.hook(state.Steps, state)
+	}
+	if state.Steps >= a.maxSteps {
+		state.Status = StatusMaxSteps
+		return graph.NodeResult[AgentState]{Update: state}, nil
+	}
+
+	req := llm.ChatRequest{
+		Model:    a.model,
+		Messages: state.Messages,
+	}
+	if a.registry != nil {
+		req.Tools = a.registry.Specs()
+	}
+	resp, err := a.client.Chat(ctx, req)
+	if err != nil {
+		return graph.NodeResult[AgentState]{}, err
+	}
+
+	state.Messages = append(state.Messages, resp.Message)
+	state.Steps++
+	if !resp.Message.HasToolCalls() {
+		state.Status = StatusFinal
+	}
+	return graph.NodeResult[AgentState]{Update: state}, nil
+}
+
+type toolNode struct {
+	agent *Agent
+}
+
+func (n *toolNode) Run(ctx context.Context, state AgentState) (graph.NodeResult[AgentState], error) {
+	if n.agent.dispatcher == nil {
+		return graph.NodeResult[AgentState]{Update: state}, nil
+	}
+
+	var resultBlocks []message.ContentBlock
+	for _, block := range lastAssistantMessage(state).Content {
+		if block.Type == message.BlockTypeToolCall && block.ToolCall != nil {
+			result := n.agent.dispatcher.Dispatch(ctx, *block.ToolCall)
+			resultBlocks = append(resultBlocks, message.NewToolResultBlock(result))
+		}
+	}
+	if len(resultBlocks) > 0 {
+		state.Messages = append(state.Messages, message.Message{
+			Role:    message.RoleTool,
+			Content: resultBlocks,
+		})
+	}
+	return graph.NodeResult[AgentState]{Update: state}, nil
+}
+
+func lastAssistantHasToolCalls(state AgentState) bool {
+	msg := lastAssistantMessage(state)
+	return msg.HasToolCalls()
+}
+
+func lastAssistantMessage(state AgentState) message.Message {
+	for i := len(state.Messages) - 1; i >= 0; i-- {
+		if state.Messages[i].Role == message.RoleAssistant {
+			return state.Messages[i]
+		}
+	}
+	return message.Message{}
 }
