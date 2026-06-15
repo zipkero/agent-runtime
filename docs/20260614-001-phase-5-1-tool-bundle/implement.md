@@ -16,7 +16,7 @@
   - 참조: SPEC §5.1, SPEC §5.2, SPEC §5.7, ANALYSIS §1, ANALYSIS §2, ANALYSIS §3, ANALYSIS §4,
     ANALYSIS D1, ANALYSIS D2
 
-- [ ] task-002: File Save Tool
+- [x] task-002: File Save Tool
   - 목적: Agent가 `file_save` tool call로 허용된 작업 디렉터리 하위 파일을 저장하고, 위험한 경로 쓰기는
     tool result 에러로 관찰할 수 있게 한다.
   - 접근: `internal/tool`에 `FileSave`를 추가하고 기존 `FileRead`의 base 경로 정규화 패턴을 재사용한다.
