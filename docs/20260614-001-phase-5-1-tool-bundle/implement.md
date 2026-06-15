@@ -29,7 +29,7 @@
   - 참조: SPEC §5.3, SPEC §5.4, SPEC §5.7, ANALYSIS §1, ANALYSIS §2, ANALYSIS §3, ANALYSIS §4,
     ANALYSIS D3
 
-- [ ] task-003: 제한된 Code Execution Tool
+- [x] task-003: 제한된 Code Execution Tool
   - 목적: Agent가 `code_execute` tool call로 허용된 command profile을 제한된 환경에서 실행하고, 허용되지
     않은 실행 요청과 제한 위반을 tool result 에러로 관찰할 수 있게 한다.
   - 접근: `internal/tool`에 `CodeExecution`, `CommandProfile`, 출력 제한 로직을 추가한다. shell 문자열 실행은
