@@ -23,6 +23,9 @@ const defaultMaxSteps = 10
 // defaultToolTimeout 은 per-tool 실행의 기본 deadline이다.
 const defaultToolTimeout = 30 * time.Second
 
+// defaultCodeExecutionMaxOutputBytes 는 code_execute 결과가 대화 state를 과도하게 키우지 않도록 제한한다.
+const defaultCodeExecutionMaxOutputBytes = 64 * 1024
+
 func main() {
 	cfg, err := config.Load()
 	if err != nil {
@@ -53,7 +56,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	registry, err := buildRegistry(workDir)
+	registry, err := buildRegistry(workDir, cfg)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "tool 등록 실패: %v\n", err)
 		os.Exit(1)
@@ -63,10 +66,10 @@ func main() {
 	os.Exit(code)
 }
 
-// buildRegistry 는 calculator와 file read tool을 등록한 Registry를 생성한다.
-// fileBase는 file read tool의 허용 범위 루트 디렉터리다.
+// buildRegistry 는 CLI Agent가 사용할 기본 tool 묶음을 등록한 Registry를 생성한다.
+// fileBase는 file read/save와 code execution의 허용 범위 루트 디렉터리다.
 // 등록 실패(충돌 또는 base 경로 오류) 시 error를 반환한다.
-func buildRegistry(fileBase string) (*tool.Registry, error) {
+func buildRegistry(fileBase string, cfg config.Config) (*tool.Registry, error) {
 	reg := tool.NewRegistry()
 
 	if err := reg.Register(&tool.Calculator{}); err != nil {
@@ -81,7 +84,38 @@ func buildRegistry(fileBase string) (*tool.Registry, error) {
 		return nil, fmt.Errorf("file_read 등록 실패: %w", err)
 	}
 
+	if err := reg.Register(tool.NewWebSearch(cfg.TavilyAPIKey, nil)); err != nil {
+		return nil, fmt.Errorf("web_search 등록 실패: %w", err)
+	}
+
+	fs, err := tool.NewFileSave(fileBase)
+	if err != nil {
+		return nil, fmt.Errorf("file_save 생성 실패: %w", err)
+	}
+	if err := reg.Register(fs); err != nil {
+		return nil, fmt.Errorf("file_save 등록 실패: %w", err)
+	}
+
+	ce, err := tool.NewCodeExecution(fileBase, defaultCommandProfiles(), defaultCodeExecutionMaxOutputBytes)
+	if err != nil {
+		return nil, fmt.Errorf("code_execute 생성 실패: %w", err)
+	}
+	if err := reg.Register(ce); err != nil {
+		return nil, fmt.Errorf("code_execute 등록 실패: %w", err)
+	}
+
 	return reg, nil
+}
+
+func defaultCommandProfiles() []tool.CommandProfile {
+	return []tool.CommandProfile{
+		{
+			Name:    "go_version",
+			Command: "go",
+			Args:    []string{"version"},
+			Env:     os.Environ(),
+		},
+	}
 }
 
 // readPrompt 는 stdin을 EOF까지 읽어 전체 입력을 하나의 프롬프트로 합쳐 반환한다.

@@ -43,7 +43,7 @@
   - 참조: SPEC §5.5, SPEC §5.6, SPEC §5.7, ANALYSIS §1, ANALYSIS §2, ANALYSIS §3, ANALYSIS §4,
     ANALYSIS D4, ANALYSIS D5
 
-- [ ] task-004: CLI registry와 Agent tool bundle 회귀
+- [x] task-004: CLI registry와 Agent tool bundle 회귀
   - 목적: CLI에서 구성되는 Agent가 Phase 5.1 tool 묶음을 schema로 노출하고, stub LLM tool call을 통해 각
     tool을 실행한 뒤 기존 stdout/stderr/exit code 계약으로 최종 답에 도달하게 한다.
   - 접근: `cmd/agent-runtime.buildRegistry`가 calculator, file read와 함께 web search, file save,

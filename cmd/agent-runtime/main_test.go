@@ -7,8 +7,10 @@ import (
 	"errors"
 	"io"
 	"os"
+	"path/filepath"
 	"testing"
 
+	"github.com/zipkero/agent-runtime/internal/config"
 	"github.com/zipkero/agent-runtime/internal/llm"
 	"github.com/zipkero/agent-runtime/internal/message"
 	"github.com/zipkero/agent-runtime/internal/tool"
@@ -84,6 +86,35 @@ func captureStderr(t *testing.T, f func()) string {
 	var buf bytes.Buffer
 	io.Copy(&buf, r)
 	return buf.String()
+}
+
+// captureStdoutStderr 은 f 실행 동안 stdout과 stderr를 함께 캡처한다.
+// 전역 출력을 바꾸므로 이 helper를 쓰는 테스트는 t.Parallel()과 함께 쓰면 안 된다.
+func captureStdoutStderr(t *testing.T, f func()) (string, string) {
+	t.Helper()
+	outR, outW, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("stdout pipe: %v", err)
+	}
+	errR, errW, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("stderr pipe: %v", err)
+	}
+
+	origOut := os.Stdout
+	origErr := os.Stderr
+	os.Stdout = outW
+	os.Stderr = errW
+	f()
+	outW.Close()
+	errW.Close()
+	os.Stdout = origOut
+	os.Stderr = origErr
+
+	var outBuf, errBuf bytes.Buffer
+	io.Copy(&outBuf, outR)
+	io.Copy(&errBuf, errR)
+	return outBuf.String(), errBuf.String()
 }
 
 // TestRun_TextResponse_Final 은 text 응답이 오면 final 상태로 stdout에 출력되고 종료코드 0을 반환하는지 검증한다.
@@ -162,6 +193,91 @@ func TestRun_ToolCallingFinal_WritesFinalToStdout(t *testing.T) {
 	}
 	if !contains(out, finalText) {
 		t.Errorf("최종 답이 stdout에 없다: %q", out)
+	}
+}
+
+func TestBuildRegistry_Phase51ToolSpecs(t *testing.T) {
+	reg, err := buildRegistry(t.TempDir(), config.Config{})
+	if err != nil {
+		t.Fatalf("buildRegistry 실패: %v", err)
+	}
+
+	names := make(map[string]bool)
+	for _, spec := range reg.Specs() {
+		names[spec.Name] = true
+	}
+	for _, want := range []string{"calculator", "file_read", "web_search", "file_save", "code_execute"} {
+		if !names[want] {
+			t.Errorf("registry schema에 %q가 없다", want)
+		}
+	}
+}
+
+func TestRun_Phase51ToolBundleCallsReachFinal(t *testing.T) {
+	workDir := t.TempDir()
+	reg, err := buildRegistry(workDir, config.Config{})
+	if err != nil {
+		t.Fatalf("buildRegistry 실패: %v", err)
+	}
+
+	const finalText = "Phase 5.1 tool 묶음 실행 후 최종 답"
+	stub := &cliSeqStub{
+		responses: []llm.ChatResponse{
+			{
+				Message: message.Message{
+					Role: message.RoleAssistant,
+					Content: []message.ContentBlock{
+						message.NewToolCallBlock(message.ToolCall{
+							ID:    "call_web",
+							Name:  "web_search",
+							Input: json.RawMessage(`{"query":"agent runtime"}`),
+						}),
+						message.NewToolCallBlock(message.ToolCall{
+							ID:    "call_save",
+							Name:  "file_save",
+							Input: json.RawMessage(`{"path":"agent-output.txt","content":"saved by cli regression"}`),
+						}),
+						message.NewToolCallBlock(message.ToolCall{
+							ID:    "call_code",
+							Name:  "code_execute",
+							Input: json.RawMessage(`{"profile":"go_version"}`),
+						}),
+					},
+				},
+			},
+			{
+				Message: message.Message{
+					Role:    message.RoleAssistant,
+					Content: []message.ContentBlock{message.NewTextBlock(finalText)},
+				},
+			},
+		},
+	}
+
+	var code int
+	out, errOut := captureStdoutStderr(t, func() {
+		code = run(context.Background(), stub, "claude-3-5-haiku-20241022", "도구 묶음 실행", 5, reg, defaultToolTimeout)
+	})
+
+	if code != 0 {
+		t.Fatalf("종료코드 0 기대, 실제: %d", code)
+	}
+	if errOut != "" {
+		t.Fatalf("tool 실패는 stderr로 노출되면 안 된다: %q", errOut)
+	}
+	if !contains(out, finalText) {
+		t.Errorf("최종 답이 stdout에 없다: %q", out)
+	}
+	if stub.calls != 2 {
+		t.Errorf("LLM 호출 횟수 기대값 2, 실제값 %d", stub.calls)
+	}
+
+	data, err := os.ReadFile(filepath.Join(workDir, "agent-output.txt"))
+	if err != nil {
+		t.Fatalf("file_save 결과 파일 읽기 실패: %v", err)
+	}
+	if string(data) != "saved by cli regression" {
+		t.Errorf("file_save 내용 기대값과 다름: %q", string(data))
 	}
 }
 

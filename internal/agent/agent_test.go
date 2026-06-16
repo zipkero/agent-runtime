@@ -4,7 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/zipkero/agent-runtime/internal/agent"
 	"github.com/zipkero/agent-runtime/internal/llm"
@@ -48,8 +53,8 @@ func (f *fakeTool) Execute(_ context.Context, _ json.RawMessage) (message.ToolRe
 // stub_test.go의 StubClient와 동일하게 ctx 취소를 먼저 존중하고 호출 횟수를 기록한다.
 type seqStub struct {
 	responses []llm.ChatResponse
-	err       error      // err != nil이면 모든 호출에서 이 에러를 반환한다
-	calls     int        // 실제로 응답을 반환한 호출 횟수
+	err       error // err != nil이면 모든 호출에서 이 에러를 반환한다
+	calls     int   // 실제로 응답을 반환한 호출 횟수
 }
 
 // Chat 은 ctx 취소를 먼저 확인하고, 순서대로 응답을 반환한다.
@@ -100,6 +105,79 @@ func textResponse(text string) llm.ChatResponse {
 			},
 		},
 	}
+}
+
+func phase51ToolBundleResponse() llm.ChatResponse {
+	return llm.ChatResponse{
+		Message: message.Message{
+			Role: message.RoleAssistant,
+			Content: []message.ContentBlock{
+				message.NewToolCallBlock(message.ToolCall{
+					ID:    "call_web",
+					Name:  "web_search",
+					Input: json.RawMessage(`{"query":"agent runtime"}`),
+				}),
+				message.NewToolCallBlock(message.ToolCall{
+					ID:    "call_save",
+					Name:  "file_save",
+					Input: json.RawMessage(`{"path":"agent-output.txt","content":"saved by agent regression"}`),
+				}),
+				message.NewToolCallBlock(message.ToolCall{
+					ID:    "call_code",
+					Name:  "code_execute",
+					Input: json.RawMessage(`{"profile":"helper","args":["stdout"]}`),
+				}),
+			},
+		},
+	}
+}
+
+func newPhase51TestRegistry(t *testing.T, workDir string) *tool.Registry {
+	t.Helper()
+
+	reg := tool.NewRegistry()
+	if err := reg.Register(tool.NewWebSearch("", nil)); err != nil {
+		t.Fatalf("web_search 등록 실패: %v", err)
+	}
+	fs, err := tool.NewFileSave(workDir)
+	if err != nil {
+		t.Fatalf("file_save 생성 실패: %v", err)
+	}
+	if err := reg.Register(fs); err != nil {
+		t.Fatalf("file_save 등록 실패: %v", err)
+	}
+	ce, err := tool.NewCodeExecution(workDir, []tool.CommandProfile{
+		{
+			Name:        "helper",
+			Command:     os.Args[0],
+			Args:        []string{"-test.run=TestRun_Phase51ToolBundle_HelperProcess", "--"},
+			Env:         []string{"GO_WANT_AGENT_PHASE51_HELPER=1"},
+			AllowedArgs: []string{"stdout"},
+		},
+	}, 1024)
+	if err != nil {
+		t.Fatalf("code_execute 생성 실패: %v", err)
+	}
+	if err := reg.Register(ce); err != nil {
+		t.Fatalf("code_execute 등록 실패: %v", err)
+	}
+	return reg
+}
+
+func TestRun_Phase51ToolBundle_HelperProcess(t *testing.T) {
+	if os.Getenv("GO_WANT_AGENT_PHASE51_HELPER") != "1" {
+		return
+	}
+	args := os.Args
+	for len(args) > 0 && args[0] != "--" {
+		args = args[1:]
+	}
+	if len(args) < 2 || args[1] != "stdout" {
+		fmt.Fprint(os.Stderr, "unexpected helper args")
+		os.Exit(2)
+	}
+	fmt.Print("agent code ok")
+	os.Exit(0)
 }
 
 // TestRun_NormalExit 는 첫 응답이 tool_call 없는 text일 때 즉시 StatusFinal로 종료되는지 검증한다.
@@ -296,7 +374,7 @@ func TestRun_ToolCall_ExecutedAndAccumulated(t *testing.T) {
 
 	stub := &seqStub{
 		responses: []llm.ChatResponse{
-			toolCallResponse(), // 1회전: tool_call 응답
+			toolCallResponse(),      // 1회전: tool_call 응답
 			textResponse(finalText), // 2회전: text 응답 → StatusFinal
 		},
 	}
@@ -386,6 +464,84 @@ func TestRun_ToolCall_ChatRequestContainsSpecs(t *testing.T) {
 	}
 	if firstReq.Tools[0].Name != toolName {
 		t.Errorf("ChatRequest.Tools[0].Name 기대값 %q, 실제값 %q", toolName, firstReq.Tools[0].Name)
+	}
+}
+
+func TestRun_Phase51ToolBundle_SpecsResultsAndFinal(t *testing.T) {
+	workDir := t.TempDir()
+	reg := newPhase51TestRegistry(t, workDir)
+	capturer := &capturingStub{
+		seqStub: seqStub{
+			responses: []llm.ChatResponse{
+				phase51ToolBundleResponse(),
+				textResponse("Phase 5.1 tool 묶음 완료"),
+			},
+		},
+	}
+	a := agent.NewAgent(capturer, "stub-model", 5, nil, reg, time.Second)
+	state := a.Run(context.Background(), "Phase 5.1 tool 묶음 테스트")
+
+	if state.Status != agent.StatusFinal {
+		t.Fatalf("종료 상태 기대값 StatusFinal, 실제값 %q", state.Status)
+	}
+	if state.Err != nil {
+		t.Fatalf("tool 실패는 Agent error가 아니어야 하나 Err=%v", state.Err)
+	}
+	if len(capturer.capturedRequests) == 0 {
+		t.Fatal("ChatRequest가 캡처되지 않았다")
+	}
+	assertToolSpecs(t, capturer.capturedRequests[0].Tools, "web_search", "file_save", "code_execute")
+
+	if len(state.Messages) != 4 {
+		t.Fatalf("누적 메시지 수 기대값 4, 실제값 %d", len(state.Messages))
+	}
+	toolMsg := state.Messages[2]
+	if toolMsg.Role != message.RoleTool {
+		t.Fatalf("Messages[2].Role 기대값 tool, 실제값 %q", toolMsg.Role)
+	}
+	results := make(map[string]message.ToolResult)
+	for _, block := range toolMsg.Content {
+		if block.Type != message.BlockTypeToolResult || block.ToolResult == nil {
+			t.Fatalf("RoleTool 메시지에 tool_result가 아닌 블록이 있다: %#v", block)
+		}
+		results[block.ToolResult.ToolCallID] = *block.ToolResult
+	}
+	if len(results) != 3 {
+		t.Fatalf("tool result 수 기대값 3, 실제값 %d", len(results))
+	}
+
+	webResult := results["call_web"]
+	if !webResult.IsError || !strings.Contains(webResult.Content, "TAVILY_API_KEY") {
+		t.Errorf("web_search 설정 누락은 IsError result로 남아야 한다: %#v", webResult)
+	}
+	saveResult := results["call_save"]
+	if saveResult.IsError || !strings.Contains(saveResult.Content, "saved path=") {
+		t.Errorf("file_save 성공 result가 기대와 다르다: %#v", saveResult)
+	}
+	codeResult := results["call_code"]
+	if codeResult.IsError || !strings.Contains(codeResult.Content, "agent code ok") {
+		t.Errorf("code_execute 성공 result가 기대와 다르다: %#v", codeResult)
+	}
+
+	data, err := os.ReadFile(filepath.Join(workDir, "agent-output.txt"))
+	if err != nil {
+		t.Fatalf("file_save 결과 파일 읽기 실패: %v", err)
+	}
+	if string(data) != "saved by agent regression" {
+		t.Errorf("file_save 내용 기대값과 다름: %q", string(data))
+	}
+}
+
+func assertToolSpecs(t *testing.T, specs []message.ToolSpec, expected ...string) {
+	t.Helper()
+	names := make(map[string]bool)
+	for _, spec := range specs {
+		names[spec.Name] = true
+	}
+	for _, name := range expected {
+		if !names[name] {
+			t.Errorf("ChatRequest.Tools에 %q schema가 없다", name)
+		}
 	}
 }
 
