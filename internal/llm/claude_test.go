@@ -284,8 +284,9 @@ func assertClaudeRequest(t *testing.T, requestBody map[string]any) {
 
 func testClaudeConfig() config.Config {
 	return config.Config{
-		AnthropicAPIKey: "test-key",
-		Model:           "claude-test",
-		Timeout:         time.Second,
+		Provider: config.ProviderClaude,
+		APIKey:   "test-key",
+		Model:    "claude-test",
+		Timeout:  time.Second,
 	}
 }

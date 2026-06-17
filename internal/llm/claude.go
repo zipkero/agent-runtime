@@ -41,14 +41,14 @@ func NewClaudeClient(cfg config.Config) (*ClaudeClient, error) {
 // newClaudeClient 은 NewClaudeClient의 구현부이자 테스트 주입 지점이다.
 // opts로 baseURL·httpClient를 받아 httptest 서버로 SDK 호출을 가로챌 수 있게 한다.
 func newClaudeClient(cfg config.Config, opts claudeClientOptions) (*ClaudeClient, error) {
-	apiKey := strings.TrimSpace(cfg.AnthropicAPIKey)
+	apiKey := strings.TrimSpace(cfg.APIKey)
 	if apiKey == "" {
-		return nil, fmt.Errorf("%s is required", config.EnvAnthropicAPIKey)
+		return nil, fmt.Errorf("%s is required", config.EnvAPIKey)
 	}
 
 	model := strings.TrimSpace(cfg.Model)
 	if model == "" {
-		return nil, fmt.Errorf("%s is required", config.EnvModel)
+		return nil, fmt.Errorf("model is required")
 	}
 
 	// SDK 환경변수 기본값을 끄고 인증을 config로만 주입한다. 재시도를 0으로 둬
