@@ -164,12 +164,13 @@ type ollamaChatResponse struct {
 // --- 변환 함수 ---
 
 // ollamaMessagesFromInternal 은 internal 메시지 슬라이스를 Ollama wire 메시지로 변환한다.
-// - assistant 메시지: text 블록은 content로, tool_call 블록은 tool_calls[]로 사상한다.
-// - RoleTool 메시지: 각 tool_result 블록을 개별 wire 메시지로 1:N 분리한다.
-//   Ollama는 tool 결과를 하나씩 독립 메시지로 받으므로 내부적으로 하나의 RoleTool 메시지에
-//   여러 tool_result가 담겨 있으면 각각 별도 메시지로 분리해야 한다.
+//   - assistant 메시지: text 블록은 content로, tool_call 블록은 tool_calls[]로 사상한다.
+//   - RoleTool 메시지: 각 tool_result 블록을 개별 wire 메시지로 1:N 분리한다.
+//     Ollama는 tool 결과를 하나씩 독립 메시지로 받으므로 내부적으로 하나의 RoleTool 메시지에
+//     여러 tool_result가 담겨 있으면 각각 별도 메시지로 분리해야 한다.
 func ollamaMessagesFromInternal(messages []message.Message) ([]ollamaWireMessage, error) {
 	var wire []ollamaWireMessage
+	toolCallNames := make(map[string]string)
 
 	for _, msg := range messages {
 		role, err := ollamaRoleFromInternal(msg.Role)
@@ -180,7 +181,7 @@ func ollamaMessagesFromInternal(messages []message.Message) ([]ollamaWireMessage
 		if msg.Role == message.RoleTool {
 			// tool_result 블록 각각을 별도 wire 메시지로 1:N 변환한다.
 			// Ollama는 tool 결과를 role:"tool" 개별 메시지로 받는다.
-			expanded, err := ollamaToolResultMessages(msg.Content)
+			expanded, err := ollamaToolResultMessages(msg.Content, toolCallNames)
 			if err != nil {
 				return nil, err
 			}
@@ -207,6 +208,9 @@ func ollamaMessagesFromInternal(messages []message.Message) ([]ollamaWireMessage
 						Arguments: block.ToolCall.Input,
 					},
 				})
+				if strings.TrimSpace(block.ToolCall.ID) != "" {
+					toolCallNames[block.ToolCall.ID] = block.ToolCall.Name
+				}
 			default:
 				return nil, fmt.Errorf("unsupported content block type %q for role %q", block.Type, role)
 			}
@@ -223,11 +227,9 @@ func ollamaMessagesFromInternal(messages []message.Message) ([]ollamaWireMessage
 }
 
 // ollamaToolResultMessages 는 tool_result 블록 슬라이스를 Ollama wire 메시지 슬라이스로
-// 1:N 변환한다. 각 tool_result는 독립 메시지 {role:"tool", content, tool_call_id}로
-// 변환되며, tool_call_id는 internal ToolResult.ToolCallID를 그대로 싣는다.
-// internal ToolResult에 tool 이름 필드가 없어 tool_name은 싣지 않으며, 호출-결과 매칭은
-// tool_call_id로만 이뤄진다.
-func ollamaToolResultMessages(blocks []message.ContentBlock) ([]ollamaWireMessage, error) {
+// 1:N 변환한다. 각 tool_result는 독립 메시지 {role:"tool", content, tool_name,
+// tool_call_id}로 변환되며, tool_call_id는 internal ToolResult.ToolCallID를 그대로 싣는다.
+func ollamaToolResultMessages(blocks []message.ContentBlock, toolCallNames map[string]string) ([]ollamaWireMessage, error) {
 	var msgs []ollamaWireMessage
 	for _, block := range blocks {
 		if block.Type != message.BlockTypeToolResult {
@@ -236,9 +238,11 @@ func ollamaToolResultMessages(blocks []message.ContentBlock) ([]ollamaWireMessag
 		if block.ToolResult == nil {
 			return nil, fmt.Errorf("tool_result block missing payload")
 		}
+		toolName := toolCallNames[block.ToolResult.ToolCallID]
 		msgs = append(msgs, ollamaWireMessage{
 			Role:       "tool",
 			Content:    block.ToolResult.Content,
+			ToolName:   toolName,
 			ToolCallID: block.ToolResult.ToolCallID,
 		})
 	}

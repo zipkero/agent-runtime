@@ -23,7 +23,7 @@
     - 확인: httptest로 요청 변환(system 메시지·stream:false·model 사상)과 응답 변환(text 블록)을 관찰하는 테스트, 생성자 필수값 부재 error 테스트, ctx 취소 error 테스트를 추가하고 `go test ./internal/llm/...` 통과.
   - 참조: SPEC §5.1 / ANALYSIS §1, §2(chat 왕복 흐름), §3, §5 D3, D6
 
-- [ ] task-003: OllamaClient의 tool calling 왕복 변환(tools·tool_calls·tool 결과·ID 매칭) 구현
+- [x] task-003: OllamaClient의 tool calling 왕복 변환(tools·tool_calls·tool 결과·ID 매칭) 구현
   - 목적: agent가 Ollama 응답의 tool 호출을 받아 tool 결과를 다시 모델에 전달하고 최종 답에 도달하는 왕복이 동작하며, Ollama 응답에 호출 식별자가 없어도 호출-결과 매칭이 유지된다.
   - 접근: req.Tools를 `tools[{type:"function", function:{name, description, parameters}}]`로 변환(InputSchema에서 type/properties/required 분리·나머지 보존)한다. assistant 메시지의 tool_call 블록을 같은 메시지의 `tool_calls[]`로, RoleTool 메시지의 각 tool_result 블록을 개별 `{role:"tool", content, tool_name, tool_call_id}` 메시지로 1:N 변환한다. 응답 `message.tool_calls[]`를 tool_call 블록으로 환원하되, id가 비면 응답 내 등장 순번 기반 결정적 ID(`call_<n>`)를 채워 internal ToolCall.ID에 싣고, 요청 변환 때 그 ID를 wire로 되싣어 왕복 동안 동일 ID를 유지한다.
   - 검증 조건:

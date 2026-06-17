@@ -17,8 +17,8 @@ import (
 // 반환하는지 검증한다.
 func TestNewOllamaClientRequiresHostAndModel(t *testing.T) {
 	cases := []struct {
-		name  string
-		cfg   config.Config
+		name string
+		cfg  config.Config
 	}{
 		{
 			name: "host 부재",
@@ -390,6 +390,21 @@ func TestOllamaClientToolResultOneToN(t *testing.T) {
 				Content: []message.ContentBlock{message.NewTextBlock("검색해줘")},
 			},
 			{
+				Role: message.RoleAssistant,
+				Content: []message.ContentBlock{
+					message.NewToolCallBlock(message.ToolCall{
+						ID:    "call_0",
+						Name:  "web_search",
+						Input: json.RawMessage(`{"query":"A"}`),
+					}),
+					message.NewToolCallBlock(message.ToolCall{
+						ID:    "call_1",
+						Name:  "calculator",
+						Input: json.RawMessage(`{"expression":"1+1"}`),
+					}),
+				},
+			},
+			{
 				// tool_result 2개를 가진 단일 RoleTool 메시지 → wire에서 2개 메시지로 분리
 				Role: message.RoleTool,
 				Content: []message.ContentBlock{
@@ -410,18 +425,27 @@ func TestOllamaClientToolResultOneToN(t *testing.T) {
 	}
 
 	messages, ok := requestBody["messages"].([]any)
-	// user(1) + tool_result 2개 분리(2) = 3개
-	if !ok || len(messages) != 3 {
-		t.Fatalf("expected 3 messages after 1:N expansion, got %d: %#v", len(messages), requestBody["messages"])
+	// user(1) + assistant tool_calls(1) + tool_result 2개 분리(2) = 4개
+	if !ok || len(messages) != 4 {
+		t.Fatalf("expected 4 messages after 1:N expansion, got %d: %#v", len(messages), requestBody["messages"])
 	}
 
-	for i, id := range []string{"call_0", "call_1"} {
-		msg, ok := messages[i+1].(map[string]any)
+	for i, want := range []struct {
+		id   string
+		name string
+	}{
+		{id: "call_0", name: "web_search"},
+		{id: "call_1", name: "calculator"},
+	} {
+		msg, ok := messages[i+2].(map[string]any)
 		if !ok || msg["role"] != "tool" {
-			t.Fatalf("expected role:tool at index %d, got %#v", i+1, messages[i+1])
+			t.Fatalf("expected role:tool at index %d, got %#v", i+2, messages[i+2])
 		}
-		if msg["tool_call_id"] != id {
-			t.Fatalf("expected tool_call_id=%s at index %d, got %v", id, i+1, msg["tool_call_id"])
+		if msg["tool_call_id"] != want.id {
+			t.Fatalf("expected tool_call_id=%s at index %d, got %v", want.id, i+2, msg["tool_call_id"])
+		}
+		if msg["tool_name"] != want.name {
+			t.Fatalf("expected tool_name=%s at index %d, got %v", want.name, i+2, msg["tool_name"])
 		}
 	}
 }
@@ -600,6 +624,9 @@ func TestOllamaClientToolCallIDRoundtrip(t *testing.T) {
 	}
 	if toolMsg["tool_call_id"] != "call_0" {
 		t.Fatalf("expected tool_call_id=call_0, got %v", toolMsg["tool_call_id"])
+	}
+	if toolMsg["tool_name"] != "web_search" {
+		t.Fatalf("expected tool_name=web_search, got %v", toolMsg["tool_name"])
 	}
 }
 
