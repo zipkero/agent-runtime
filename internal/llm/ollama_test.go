@@ -216,6 +216,393 @@ func TestOllamaClientReturnsErrorOnNonOKStatus(t *testing.T) {
 	}
 }
 
+// TestOllamaClientToolsSchemaMapping 은 req.Tools가 올바른 Ollama wire 형태로 변환되는지
+// 검증한다. type/properties/required 분리 및 나머지 키 보존을 확인한다.
+func TestOllamaClientToolsSchemaMapping(t *testing.T) {
+	var requestBody map[string]any
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := json.NewDecoder(r.Body).Decode(&requestBody); err != nil {
+			t.Fatalf("decode request body: %v", err)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"message": {"role": "assistant", "content": "ok"}}`))
+	}))
+	defer server.Close()
+
+	client, err := newOllamaClient(server.URL, "llama3", server.Client())
+	if err != nil {
+		t.Fatalf("newOllamaClient: %v", err)
+	}
+
+	schema := json.RawMessage(`{
+		"type": "object",
+		"properties": {"query": {"type": "string"}},
+		"required": ["query"],
+		"additionalProperties": false
+	}`)
+
+	_, err = client.Chat(context.Background(), ChatRequest{
+		Messages: []message.Message{
+			{Role: message.RoleUser, Content: []message.ContentBlock{message.NewTextBlock("search")}},
+		},
+		Tools: []message.ToolSpec{
+			{Name: "web_search", Description: "웹 검색", InputSchema: schema},
+		},
+	})
+	if err != nil {
+		t.Fatalf("Chat: %v", err)
+	}
+
+	// tools[] 검증
+	tools, ok := requestBody["tools"].([]any)
+	if !ok || len(tools) != 1 {
+		t.Fatalf("expected 1 tool, got %#v", requestBody["tools"])
+	}
+	tool, ok := tools[0].(map[string]any)
+	if !ok || tool["type"] != "function" {
+		t.Fatalf("unexpected tool: %#v", tools[0])
+	}
+	fn, ok := tool["function"].(map[string]any)
+	if !ok {
+		t.Fatalf("unexpected function: %#v", tool["function"])
+	}
+	if fn["name"] != "web_search" {
+		t.Fatalf("unexpected tool name: %v", fn["name"])
+	}
+	if fn["description"] != "웹 검색" {
+		t.Fatalf("unexpected tool description: %v", fn["description"])
+	}
+
+	// parameters 내 type·properties·required·additionalProperties 보존 확인
+	params, ok := fn["parameters"].(map[string]any)
+	if !ok {
+		t.Fatalf("parameters is not a map: %#v", fn["parameters"])
+	}
+	if params["type"] != "object" {
+		t.Fatalf("expected type=object, got %v", params["type"])
+	}
+	if params["properties"] == nil {
+		t.Fatalf("expected properties, got nil")
+	}
+	required, ok := params["required"].([]any)
+	if !ok || len(required) != 1 || required[0] != "query" {
+		t.Fatalf("unexpected required: %#v", params["required"])
+	}
+	// 나머지 키(additionalProperties) 보존 확인
+	if params["additionalProperties"] != false {
+		t.Fatalf("expected additionalProperties=false, got %v", params["additionalProperties"])
+	}
+}
+
+// TestOllamaClientAssistantToolCallsMapping 은 assistant 메시지의 tool_call 블록이
+// wire tool_calls[]로 변환되는지 검증한다.
+func TestOllamaClientAssistantToolCallsMapping(t *testing.T) {
+	var requestBody map[string]any
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := json.NewDecoder(r.Body).Decode(&requestBody); err != nil {
+			t.Fatalf("decode request body: %v", err)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"message": {"role": "assistant", "content": "완료"}}`))
+	}))
+	defer server.Close()
+
+	client, err := newOllamaClient(server.URL, "llama3", server.Client())
+	if err != nil {
+		t.Fatalf("newOllamaClient: %v", err)
+	}
+
+	_, err = client.Chat(context.Background(), ChatRequest{
+		Messages: []message.Message{
+			{
+				Role:    message.RoleUser,
+				Content: []message.ContentBlock{message.NewTextBlock("검색해줘")},
+			},
+			{
+				Role: message.RoleAssistant,
+				Content: []message.ContentBlock{
+					message.NewToolCallBlock(message.ToolCall{
+						ID:    "call_0",
+						Name:  "web_search",
+						Input: json.RawMessage(`{"query":"Go testing"}`),
+					}),
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("Chat: %v", err)
+	}
+
+	messages, ok := requestBody["messages"].([]any)
+	if !ok || len(messages) != 2 {
+		t.Fatalf("expected 2 messages, got %#v", requestBody["messages"])
+	}
+
+	assistantMsg, ok := messages[1].(map[string]any)
+	if !ok || assistantMsg["role"] != "assistant" {
+		t.Fatalf("unexpected assistant message: %#v", messages[1])
+	}
+
+	toolCalls, ok := assistantMsg["tool_calls"].([]any)
+	if !ok || len(toolCalls) != 1 {
+		t.Fatalf("expected 1 tool_call, got %#v", assistantMsg["tool_calls"])
+	}
+
+	tc, ok := toolCalls[0].(map[string]any)
+	if !ok {
+		t.Fatalf("unexpected tool_call: %#v", toolCalls[0])
+	}
+	if tc["id"] != "call_0" {
+		t.Fatalf("unexpected tool_call id: %v", tc["id"])
+	}
+	fn, ok := tc["function"].(map[string]any)
+	if !ok || fn["name"] != "web_search" {
+		t.Fatalf("unexpected tool_call function: %#v", tc["function"])
+	}
+}
+
+// TestOllamaClientToolResultOneToN 은 RoleTool 메시지의 tool_result 블록이
+// 각각 개별 role:"tool" wire 메시지로 1:N 변환되는지 검증한다.
+func TestOllamaClientToolResultOneToN(t *testing.T) {
+	var requestBody map[string]any
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := json.NewDecoder(r.Body).Decode(&requestBody); err != nil {
+			t.Fatalf("decode request body: %v", err)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"message": {"role": "assistant", "content": "완료"}}`))
+	}))
+	defer server.Close()
+
+	client, err := newOllamaClient(server.URL, "llama3", server.Client())
+	if err != nil {
+		t.Fatalf("newOllamaClient: %v", err)
+	}
+
+	_, err = client.Chat(context.Background(), ChatRequest{
+		Messages: []message.Message{
+			{
+				Role:    message.RoleUser,
+				Content: []message.ContentBlock{message.NewTextBlock("검색해줘")},
+			},
+			{
+				// tool_result 2개를 가진 단일 RoleTool 메시지 → wire에서 2개 메시지로 분리
+				Role: message.RoleTool,
+				Content: []message.ContentBlock{
+					message.NewToolResultBlock(message.ToolResult{
+						ToolCallID: "call_0",
+						Content:    "결과A",
+					}),
+					message.NewToolResultBlock(message.ToolResult{
+						ToolCallID: "call_1",
+						Content:    "결과B",
+					}),
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("Chat: %v", err)
+	}
+
+	messages, ok := requestBody["messages"].([]any)
+	// user(1) + tool_result 2개 분리(2) = 3개
+	if !ok || len(messages) != 3 {
+		t.Fatalf("expected 3 messages after 1:N expansion, got %d: %#v", len(messages), requestBody["messages"])
+	}
+
+	for i, id := range []string{"call_0", "call_1"} {
+		msg, ok := messages[i+1].(map[string]any)
+		if !ok || msg["role"] != "tool" {
+			t.Fatalf("expected role:tool at index %d, got %#v", i+1, messages[i+1])
+		}
+		if msg["tool_call_id"] != id {
+			t.Fatalf("expected tool_call_id=%s at index %d, got %v", id, i+1, msg["tool_call_id"])
+		}
+	}
+}
+
+// TestOllamaClientResponseToolCallConversion 은 응답 tool_calls[]가 internal tool_call
+// 블록으로 환원되는지 검증하며, id가 있으면 그대로, 비어 있으면 결정적 ID(call_<n>)를 부여한다.
+func TestOllamaClientResponseToolCallConversion(t *testing.T) {
+	cases := []struct {
+		name       string
+		serverResp string
+		wantIDs    []string
+	}{
+		{
+			name: "id 있는 응답",
+			serverResp: `{"message": {"role": "assistant", "tool_calls": [
+				{"id": "abc123", "function": {"name": "web_search", "arguments": {"query": "Go"}}}
+			]}}`,
+			wantIDs: []string{"abc123"},
+		},
+		{
+			name: "id 없는 응답(결정적 ID 부여)",
+			serverResp: `{"message": {"role": "assistant", "tool_calls": [
+				{"function": {"name": "web_search", "arguments": {"query": "Go"}}},
+				{"function": {"name": "calc", "arguments": {"expr": "1+1"}}}
+			]}}`,
+			wantIDs: []string{"call_0", "call_1"},
+		},
+		{
+			name: "text와 tool_call 혼합",
+			serverResp: `{"message": {"role": "assistant", "content": "검색합니다", "tool_calls": [
+				{"function": {"name": "web_search", "arguments": {"query": "Go"}}}
+			]}}`,
+			wantIDs: []string{"call_0"},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(tc.serverResp))
+			}))
+			defer server.Close()
+
+			client, err := newOllamaClient(server.URL, "llama3", server.Client())
+			if err != nil {
+				t.Fatalf("newOllamaClient: %v", err)
+			}
+
+			resp, err := client.Chat(context.Background(), ChatRequest{
+				Messages: []message.Message{
+					{Role: message.RoleUser, Content: []message.ContentBlock{message.NewTextBlock("hello")}},
+				},
+			})
+			if err != nil {
+				t.Fatalf("Chat: %v", err)
+			}
+
+			// tool_call 블록 추출
+			var toolCalls []message.ContentBlock
+			for _, b := range resp.Message.Content {
+				if b.Type == message.BlockTypeToolCall {
+					toolCalls = append(toolCalls, b)
+				}
+			}
+
+			if len(toolCalls) != len(tc.wantIDs) {
+				t.Fatalf("expected %d tool_call blocks, got %d", len(tc.wantIDs), len(toolCalls))
+			}
+
+			for i, want := range tc.wantIDs {
+				got := toolCalls[i].ToolCall.ID
+				if got != want {
+					t.Fatalf("tool_call[%d] ID: want %q, got %q", i, want, got)
+				}
+			}
+		})
+	}
+}
+
+// TestOllamaClientToolCallIDRoundtrip 은 응답 tool_call ID가 다음 요청의
+// assistant tool_calls[].id와 tool 메시지 tool_call_id로 동일하게 왕복되는지 검증한다.
+func TestOllamaClientToolCallIDRoundtrip(t *testing.T) {
+	// 1차 요청: tool_call 응답(id 없음 → call_0 부여)
+	// 2차 요청: call_0이 assistant tool_calls·tool 메시지에 실리는지 확인
+	var secondRequestBody map[string]any
+
+	callCount := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		callCount++
+		if callCount == 1 {
+			// 1차: id 없는 tool_call 응답
+			_, _ = w.Write([]byte(`{"message": {"role": "assistant", "tool_calls": [
+				{"function": {"name": "web_search", "arguments": {"query": "Go"}}}
+			]}}`))
+		} else {
+			// 2차 요청 body를 캡처한다.
+			if err := json.NewDecoder(r.Body).Decode(&secondRequestBody); err != nil {
+				t.Errorf("decode second request body: %v", err)
+			}
+			_, _ = w.Write([]byte(`{"message": {"role": "assistant", "content": "최종 응답"}}`))
+		}
+	}))
+	defer server.Close()
+
+	client, err := newOllamaClient(server.URL, "llama3", server.Client())
+	if err != nil {
+		t.Fatalf("newOllamaClient: %v", err)
+	}
+
+	// 1차 요청
+	firstResp, err := client.Chat(context.Background(), ChatRequest{
+		Messages: []message.Message{
+			{Role: message.RoleUser, Content: []message.ContentBlock{message.NewTextBlock("검색해줘")}},
+		},
+	})
+	if err != nil {
+		t.Fatalf("1차 Chat: %v", err)
+	}
+
+	// 응답에서 tool_call ID 확인
+	if len(firstResp.Message.Content) == 0 || firstResp.Message.Content[0].Type != message.BlockTypeToolCall {
+		t.Fatalf("expected tool_call block in first response")
+	}
+	toolCallID := firstResp.Message.Content[0].ToolCall.ID
+	if toolCallID != "call_0" {
+		t.Fatalf("expected call_0, got %s", toolCallID)
+	}
+
+	// 2차 요청: 1차 응답 + tool 결과를 history에 포함
+	_, err = client.Chat(context.Background(), ChatRequest{
+		Messages: []message.Message{
+			{Role: message.RoleUser, Content: []message.ContentBlock{message.NewTextBlock("검색해줘")}},
+			firstResp.Message, // assistant(tool_call call_0)
+			{
+				Role: message.RoleTool,
+				Content: []message.ContentBlock{
+					message.NewToolResultBlock(message.ToolResult{
+						ToolCallID: toolCallID, // call_0
+						Content:    "검색 결과",
+					}),
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("2차 Chat: %v", err)
+	}
+
+	// 2차 요청의 wire messages 확인
+	msgs, ok := secondRequestBody["messages"].([]any)
+	// user + assistant(tool_calls) + tool(결과) = 3개
+	if !ok || len(msgs) != 3 {
+		t.Fatalf("expected 3 messages in second request, got %d", len(msgs))
+	}
+
+	// assistant 메시지의 tool_calls[].id = call_0
+	assistantMsg, ok := msgs[1].(map[string]any)
+	if !ok {
+		t.Fatalf("unexpected assistant msg: %#v", msgs[1])
+	}
+	toolCalls, ok := assistantMsg["tool_calls"].([]any)
+	if !ok || len(toolCalls) != 1 {
+		t.Fatalf("expected 1 tool_call in assistant msg: %#v", assistantMsg["tool_calls"])
+	}
+	tc, ok := toolCalls[0].(map[string]any)
+	if !ok || tc["id"] != "call_0" {
+		t.Fatalf("expected call_0 in assistant tool_calls, got %#v", tc)
+	}
+
+	// tool 메시지의 tool_call_id = call_0
+	toolMsg, ok := msgs[2].(map[string]any)
+	if !ok || toolMsg["role"] != "tool" {
+		t.Fatalf("unexpected tool msg: %#v", msgs[2])
+	}
+	if toolMsg["tool_call_id"] != "call_0" {
+		t.Fatalf("expected tool_call_id=call_0, got %v", toolMsg["tool_call_id"])
+	}
+}
+
 // assertOllamaRequest 는 가로챈 요청 body에 필수 필드가 올바르게 실렸는지 검증한다.
 func assertOllamaRequest(t *testing.T, requestBody map[string]any) {
 	t.Helper()
