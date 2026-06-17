@@ -33,7 +33,7 @@
 
 ## Section: 조립 경계 (cmd/agent-runtime)
 
-- [ ] task-004: provider factory로 client를 선택해 활성 LLM 경로를 연결
+- [x] task-004: provider factory로 client를 선택해 활성 LLM 경로를 연결
   - 목적: 실행 시 지정된 provider(미지정 시 ollama)에 맞는 client가 생성되어, ollama·claude 각각에서 모델 응답이 stdout에 출력되고, 필수 설정값 부재나 인식 불가 provider 시 오류가 stderr에 출력되며 비정상 종료코드로 종료한다.
   - 접근: `internal/llm`에 `NewClient(cfg) (LLMClient, error)` factory를 추가해 provider 식별값으로 `NewOllamaClient`/`NewClaudeClient` 중 하나를 반환한다. main의 client 생성 한 줄을 이 factory 호출로 교체한다. buildRegistry·readPrompt·run 본문은 그대로 둔다.
   - 검증 조건:

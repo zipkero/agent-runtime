@@ -8,7 +8,7 @@ Claude는 기존 SDK 경로를 유지한다. 기본 provider는 ollama.
 ## 상태
 - [x] SPEC
 - [x] ANALYSIS
-- [ ] IMPLEMENT
+- [x] IMPLEMENT
 
 ## 문서
 - [spec.md](./spec.md)
@@ -21,3 +21,4 @@ Claude는 기존 SDK 경로를 유지한다. 기본 provider는 ollama.
 - 2026-06-16: SPEC·ANALYSIS 재작성 (Ollama 전용 교체 + 직접 HTTP 전환)
 - 2026-06-16: IMPLEMENT 체크리스트 작성
 - 2026-06-17: SPEC·ANALYSIS·IMPLEMENT 재작성 (범용 provider 선택 설계로 전환, task-001 재작업)
+- 2026-06-18: IMPLEMENT 완료

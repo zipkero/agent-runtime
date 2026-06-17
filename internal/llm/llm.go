@@ -3,7 +3,9 @@ package llm
 
 import (
 	"context"
+	"fmt"
 
+	"github.com/zipkero/agent-runtime/internal/config"
 	"github.com/zipkero/agent-runtime/internal/message"
 )
 
@@ -22,4 +24,16 @@ type ChatRequest struct {
 // ChatResponse 는 LLM provider가 반환한 assistant 메시지를 담는다.
 type ChatResponse struct {
 	Message message.Message
+}
+
+// NewClient 는 설정된 provider에 맞는 LLMClient 구현체를 생성한다.
+func NewClient(cfg config.Config) (LLMClient, error) {
+	switch cfg.Provider {
+	case config.ProviderOllama:
+		return NewOllamaClient(cfg)
+	case config.ProviderClaude:
+		return NewClaudeClient(cfg)
+	default:
+		return nil, fmt.Errorf("unsupported provider %q", cfg.Provider)
+	}
 }

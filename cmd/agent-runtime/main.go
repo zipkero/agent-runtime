@@ -33,7 +33,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	client, err := llm.NewClaudeClient(cfg)
+	client, err := llm.NewClient(cfg)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "client error: %v\n", err)
 		os.Exit(1)
