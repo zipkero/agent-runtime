@@ -13,7 +13,6 @@ import (
 	"github.com/zipkero/agent-runtime/internal/agent"
 	"github.com/zipkero/agent-runtime/internal/config"
 	"github.com/zipkero/agent-runtime/internal/llm"
-	"github.com/zipkero/agent-runtime/internal/message"
 	"github.com/zipkero/agent-runtime/internal/tool"
 )
 
@@ -132,39 +131,36 @@ func readPrompt() (string, error) {
 	return strings.TrimSpace(strings.Join(lines, "\n")), nil
 }
 
-// run 은 Agent loop를 통해 프롬프트를 처리하고 종료 상태별로 출력을 분기한 뒤 종료코드를 반환한다.
+// run 은 Runner 기반 Agent loop로 프롬프트를 처리하고 종료 상태별로 출력을 분기한 뒤 종료코드를 반환한다.
 // final이면 최종 답을 stdout에 출력하고 0을 반환한다.
 // error·ctx 취소이면 원인을 stderr에 쓰고 1을 반환한다.
 // max step 초과이면 "max step 초과" 문구를 stderr에 쓰고 1을 반환한다.
 func run(ctx context.Context, client llm.LLMClient, model, prompt string, maxSteps int, registry *tool.Registry, toolTimeout time.Duration) int {
-	a := agent.NewAgent(client, model, maxSteps, nil, registry, toolTimeout)
-	state := a.Run(ctx, prompt)
+	runner, err := agent.NewRunner(agent.RunnerConfig{
+		Client:      client,
+		Model:       model,
+		MaxSteps:    maxSteps,
+		Registry:    registry,
+		ToolTimeout: toolTimeout,
+	})
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "runner error: %v\n", err)
+		return 1
+	}
 
-	switch state.Status {
-	case agent.StatusFinal:
-		finalMsg, ok := state.FinalMessage()
-		if ok {
-			printMessage(finalMsg)
-		}
+	result := runner.Run(ctx, prompt)
+
+	switch result.Status {
+	case agent.RunnerStatusSuccess:
+		fmt.Println(result.FinalText)
 		return 0
-	case agent.StatusMaxSteps:
+	case agent.RunnerStatusMaxSteps:
 		// max step 초과는 실패로 표현 — error와 문구를 구분해 원인을 드러낸다.
-		fmt.Fprintf(os.Stderr, "max step 초과로 최종 답에 도달하지 못함 (step=%d)\n", state.Steps)
+		fmt.Fprintf(os.Stderr, "max step 초과로 최종 답에 도달하지 못함 (step=%d)\n", result.State.Steps)
 		return 1
 	default:
 		// StatusError: 원인 에러를 stderr에 쓰고 비정상 종료코드(ctx 취소도 동일 처리).
-		fmt.Fprintf(os.Stderr, "chat error: %v\n", state.Err)
+		fmt.Fprintf(os.Stderr, "chat error: %v\n", result.Err)
 		return 1
 	}
-}
-
-// printMessage 는 Message의 Content를 텍스트 블록만 골라 stdout에 출력한다.
-// tool_call 블록은 final 상태에서 나타나지 않으므로 텍스트만 처리한다.
-func printMessage(msg message.Message) {
-	for _, block := range msg.Content {
-		if block.Type == message.BlockTypeText {
-			fmt.Print(block.Text)
-		}
-	}
-	fmt.Println()
 }

@@ -15,7 +15,7 @@
       output contract 미지정 경로를 추가하고 `go test ./internal/agent/...` 통과.
   - 참조: SPEC §5.1, §5.2, §5.10 / ANALYSIS §1, §2, §3, §5 D1, D7
 
-- [ ] task-002: CLI 실행 경로를 Runner 기반으로 연결
+- [x] task-002: CLI 실행 경로를 Runner 기반으로 연결
   - 목적: 기존 CLI 사용자가 같은 stdin/stdout/stderr/exit code 계약을 유지하면서 Runner 기반 Single Agent 실행을
     사용하게 한다.
   - 접근: `cmd/agent-runtime.run`이 직접 `agent.NewAgent`를 만들지 않고 `agent.NewRunner`로 실행하도록 바꾼다.
