@@ -120,6 +120,8 @@ func TestRunner_PostModelMiddlewareChangesResponse(t *testing.T) {
 	}
 }
 
+// TestRunner_MiddlewareOrderAndChangePropagation 는 여러 middleware의 pre와 post hook이 등록 순서대로
+// 실행되고, 앞 hook의 변경값이 뒤 hook과 최종 Runner 결과까지 전달되는지 확인한다.
 func TestRunner_MiddlewareOrderAndChangePropagation(t *testing.T) {
 	var events []string
 	capturer := &capturingStub{

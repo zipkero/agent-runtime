@@ -41,6 +41,8 @@ func newTestCodeExecution(t *testing.T, maxOutputBytes int, profiles ...tool.Com
 	return ce
 }
 
+// TestCodeExecution_HelperProcess 는 code_execute 테스트가 하위 프로세스 실행 결과를 통제할 수 있도록
+// 테스트 바이너리 안에서 stdout, stderr, exit code, 지연, 대량 출력 모드를 제공한다.
 func TestCodeExecution_HelperProcess(t *testing.T) {
 	if os.Getenv("GO_WANT_CODE_EXEC_HELPER") != "1" {
 		return

@@ -303,6 +303,9 @@ func TestRun_ToolCall_ChatRequestContainsSpecs(t *testing.T) {
 	}
 }
 
+// TestRun_Phase51ToolBundle_SpecsResultsAndFinal 는 여러 tool call을 한 번에 처리할 때 개별
+// tool 실패가 Agent error가 아니라 IsError tool_result로 누적되고, 성공한 tool result와 함께
+// 다음 LLM 회전으로 전달되는지 확인한다.
 func TestRun_Phase51ToolBundle_SpecsResultsAndFinal(t *testing.T) {
 	workDir := t.TempDir()
 	reg := newPhase51TestRegistry(t, workDir)

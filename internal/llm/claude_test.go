@@ -14,6 +14,8 @@ import (
 	"github.com/zipkero/agent-runtime/internal/message"
 )
 
+// TestClaudeClientMapsRequestAndResponse 는 provider 공통 메시지와 tool schema가 Claude 전송 형식으로
+// 변환되고, Claude의 text/tool_use 응답이 내부 message block으로 되돌아오는지 확인한다.
 func TestClaudeClientMapsRequestAndResponse(t *testing.T) {
 	var requestBody map[string]any
 

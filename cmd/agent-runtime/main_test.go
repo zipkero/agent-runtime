@@ -205,6 +205,8 @@ func TestRun_ToolCallingFinal_WritesFinalToStdout(t *testing.T) {
 	}
 }
 
+// TestBuildRegistry_Phase51ToolSpecs 는 CLI 기본 registry가 에이전트 실행에 필요한 기본 도구들을
+// LLM에 전달할 schema로 노출하는지 확인한다.
 func TestBuildRegistry_Phase51ToolSpecs(t *testing.T) {
 	reg, err := buildRegistry(t.TempDir(), config.Config{})
 	if err != nil {
@@ -222,6 +224,8 @@ func TestBuildRegistry_Phase51ToolSpecs(t *testing.T) {
 	}
 }
 
+// TestRun_Phase51ToolBundleCallsReachFinal 는 여러 tool call이 한 응답에 섞여도 CLI가 tool 실패를
+// stderr로 승격하지 않고, 성공한 tool의 부수 효과와 최종 stdout 응답 계약을 유지하는지 확인한다.
 func TestRun_Phase51ToolBundleCallsReachFinal(t *testing.T) {
 	workDir := t.TempDir()
 	reg, err := buildRegistry(workDir, config.Config{})

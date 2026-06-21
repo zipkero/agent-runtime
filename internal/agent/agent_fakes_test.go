@@ -180,6 +180,8 @@ func newPhase51TestRegistry(t *testing.T, workDir string) *tool.Registry {
 	return reg
 }
 
+// TestRun_Phase51ToolBundle_HelperProcess 는 code_execute가 테스트 바이너리를 하위 프로세스로 다시
+// 실행할 때 사용하는 helper 진입점이다.
 func TestRun_Phase51ToolBundle_HelperProcess(t *testing.T) {
 	if os.Getenv("GO_WANT_AGENT_PHASE51_HELPER") != "1" {
 		return
