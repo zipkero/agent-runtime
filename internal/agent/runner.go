@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -22,6 +23,8 @@ const (
 	RunnerStatusMaxSteps RunnerStatus = "max_steps"
 	// RunnerStatusAgentError 는 LLM 호출, context 취소, graph 구성 오류 같은 Agent 실행 실패를 나타낸다.
 	RunnerStatusAgentError RunnerStatus = "agent_error"
+	// RunnerStatusStructuredOutputError 는 최종 답이 output contract를 만족하지 못한 실패를 나타낸다.
+	RunnerStatusStructuredOutputError RunnerStatus = "structured_output_error"
 )
 
 var (
@@ -37,6 +40,7 @@ type RunnerConfig struct {
 	Registry    *tool.Registry
 	ToolTimeout time.Duration
 	Middleware  []Middleware
+	Output      *OutputContract
 	Hook        ReflectionHook
 }
 
@@ -48,16 +52,19 @@ type Runner struct {
 	registry    *tool.Registry
 	toolTimeout time.Duration
 	middleware  []Middleware
+	output      *OutputContract
 	hook        ReflectionHook
 }
 
 // RunnerResult 는 Runner 실행 후 호출자가 확인할 수 있는 최종 결과 표면이다.
 type RunnerResult struct {
-	State        AgentState
-	FinalMessage message.Message
-	FinalText    string
-	Status       RunnerStatus
-	Err          error
+	State           AgentState
+	FinalMessage    message.Message
+	FinalText       string
+	StructuredRaw   json.RawMessage
+	StructuredValue any
+	Status          RunnerStatus
+	Err             error
 }
 
 // NewRunner 는 실행 가능한 Runner를 생성한다.
@@ -72,6 +79,7 @@ func NewRunner(cfg RunnerConfig) (*Runner, error) {
 		registry:    cfg.Registry,
 		toolTimeout: cfg.ToolTimeout,
 		middleware:  append([]Middleware(nil), cfg.Middleware...),
+		output:      cloneOutputContract(cfg.Output),
 		hook:        cfg.Hook,
 	}, nil
 }
@@ -96,6 +104,16 @@ func (r *Runner) Run(ctx context.Context, prompt string) RunnerResult {
 		result.Status = RunnerStatusSuccess
 		result.FinalMessage = finalMsg
 		result.FinalText = textFromMessage(finalMsg)
+		if r.output != nil {
+			raw, value, err := parseStructuredOutput(result.FinalText, *r.output)
+			if err != nil {
+				result.Status = RunnerStatusStructuredOutputError
+				result.Err = err
+				return result
+			}
+			result.StructuredRaw = raw
+			result.StructuredValue = value
+		}
 		return result
 	case StatusMaxSteps:
 		result.Status = RunnerStatusMaxSteps

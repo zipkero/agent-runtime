@@ -2,6 +2,7 @@ package agent_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"testing"
 	"time"
@@ -12,6 +13,8 @@ import (
 	"github.com/zipkero/agent-runtime/internal/tool"
 )
 
+// TestRunner_NoOutputContractUsesTextOnlyResult 는 output contract가 없을 때 기존 text-only 결과 표면이
+// structured output 필드 없이 그대로 유지되어야 한다는 회귀 조건을 검증한다.
 func TestRunner_NoOutputContractUsesTextOnlyResult(t *testing.T) {
 	const promptText = "runner text-only 프롬프트"
 	const replyText = "runner 최종 답"
@@ -46,6 +49,136 @@ func TestRunner_NoOutputContractUsesTextOnlyResult(t *testing.T) {
 	if result.Err != nil {
 		t.Errorf("success 결과에서 Err는 nil이어야 하나 Err=%v", result.Err)
 	}
+	if result.StructuredRaw != nil {
+		t.Errorf("output contract 없는 결과의 StructuredRaw는 nil이어야 하나 실제값 %s", result.StructuredRaw)
+	}
+	if result.StructuredValue != nil {
+		t.Errorf("output contract 없는 결과의 StructuredValue는 nil이어야 하나 실제값 %#v", result.StructuredValue)
+	}
+}
+
+// TestRunner_StructuredOutputSuccess 는 최종 assistant JSON text가 output contract를 만족하면 raw JSON과
+// decoded value가 success 결과에 함께 포함되어야 한다는 계약을 검증한다.
+func TestRunner_StructuredOutputSuccess(t *testing.T) {
+	const finalText = `{"answer":"완료","score":0.9}`
+	runner, err := agent.NewRunner(agent.RunnerConfig{
+		Client:   &seqStub{responses: []llm.ChatResponse{textResponse(finalText)}},
+		Model:    "stub-model",
+		MaxSteps: 5,
+		Registry: tool.NewRegistry(),
+		Output: &agent.OutputContract{
+			Name: "answer_result",
+			Schema: json.RawMessage(`{
+				"type": "object",
+				"required": ["answer", "score"],
+				"properties": {
+					"answer": {"type": "string"},
+					"score": {"type": "number"}
+				},
+				"additionalProperties": false
+			}`),
+		},
+	})
+	if err != nil {
+		t.Fatalf("NewRunner 실패: %v", err)
+	}
+
+	result := runner.Run(context.Background(), "structured output 성공 테스트")
+
+	if result.Status != agent.RunnerStatusSuccess {
+		t.Fatalf("RunnerStatus 기대값 success, 실제값 %q, err=%v", result.Status, result.Err)
+	}
+	if result.FinalText != finalText {
+		t.Errorf("FinalText 기대값 %q, 실제값 %q", finalText, result.FinalText)
+	}
+	if string(result.StructuredRaw) != finalText {
+		t.Errorf("StructuredRaw 기대값 %q, 실제값 %q", finalText, result.StructuredRaw)
+	}
+	value, ok := result.StructuredValue.(map[string]any)
+	if !ok {
+		t.Fatalf("StructuredValue 타입 기대값 map[string]any, 실제값 %#v", result.StructuredValue)
+	}
+	if value["answer"] != "완료" {
+		t.Errorf("StructuredValue[answer] 기대값 %q, 실제값 %#v", "완료", value["answer"])
+	}
+	if value["score"] != 0.9 {
+		t.Errorf("StructuredValue[score] 기대값 0.9, 실제값 %#v", value["score"])
+	}
+}
+
+// TestRunner_StructuredOutputMalformedJSONFails 는 최종 text가 JSON으로 파싱되지 않으면 Agent state와 raw text를
+// 보존하면서 structured output parse 실패로 분류해야 한다는 계약을 검증한다.
+func TestRunner_StructuredOutputMalformedJSONFails(t *testing.T) {
+	const finalText = `not-json`
+	runner, err := agent.NewRunner(agent.RunnerConfig{
+		Client:   &seqStub{responses: []llm.ChatResponse{textResponse(finalText)}},
+		Model:    "stub-model",
+		MaxSteps: 5,
+		Registry: tool.NewRegistry(),
+		Output: &agent.OutputContract{
+			Name:   "answer_result",
+			Schema: json.RawMessage(`{"type":"object"}`),
+		},
+	})
+	if err != nil {
+		t.Fatalf("NewRunner 실패: %v", err)
+	}
+
+	result := runner.Run(context.Background(), "structured output JSON 파싱 실패 테스트")
+
+	assertStructuredOutputError(t, result, finalText, agent.StructuredOutputErrorParse)
+}
+
+// TestRunner_StructuredOutputSchemaValidationFails 는 JSON 파싱은 성공했지만 schema를 만족하지 않는 최종 text를
+// structured output validation 실패로 분류해야 한다는 계약을 검증한다.
+func TestRunner_StructuredOutputSchemaValidationFails(t *testing.T) {
+	const finalText = `{"answer":7}`
+	runner, err := agent.NewRunner(agent.RunnerConfig{
+		Client:   &seqStub{responses: []llm.ChatResponse{textResponse(finalText)}},
+		Model:    "stub-model",
+		MaxSteps: 5,
+		Registry: tool.NewRegistry(),
+		Output: &agent.OutputContract{
+			Name: "answer_result",
+			Schema: json.RawMessage(`{
+				"type": "object",
+				"required": ["answer"],
+				"properties": {
+					"answer": {"type": "string"}
+				}
+			}`),
+		},
+	})
+	if err != nil {
+		t.Fatalf("NewRunner 실패: %v", err)
+	}
+
+	result := runner.Run(context.Background(), "structured output schema 검증 실패 테스트")
+
+	assertStructuredOutputError(t, result, finalText, agent.StructuredOutputErrorValidation)
+}
+
+// TestRunner_StructuredOutputEmptySchemaFails 는 비어 있는 output schema가 조용한 fallback 없이
+// structured output invalid_schema 실패로 분류되어야 한다는 계약을 검증한다.
+func TestRunner_StructuredOutputEmptySchemaFails(t *testing.T) {
+	const finalText = `{"answer":"완료"}`
+	runner, err := agent.NewRunner(agent.RunnerConfig{
+		Client:   &seqStub{responses: []llm.ChatResponse{textResponse(finalText)}},
+		Model:    "stub-model",
+		MaxSteps: 5,
+		Registry: tool.NewRegistry(),
+		Output: &agent.OutputContract{
+			Name:   "answer_result",
+			Schema: json.RawMessage(`  `),
+		},
+	})
+	if err != nil {
+		t.Fatalf("NewRunner 실패: %v", err)
+	}
+
+	result := runner.Run(context.Background(), "structured output 빈 schema 테스트")
+
+	assertStructuredOutputError(t, result, finalText, agent.StructuredOutputErrorInvalidSchema)
 }
 
 func TestRunner_ToolCallExecutesAndAccumulates(t *testing.T) {
@@ -164,4 +297,33 @@ func TestRunner_StatusMapping_MaxStepsAndError(t *testing.T) {
 			t.Errorf("agent_error 결과에서 FinalText는 비어야 하나 실제값 %q", result.FinalText)
 		}
 	})
+}
+
+func assertStructuredOutputError(t *testing.T, result agent.RunnerResult, finalText string, wantKind agent.StructuredOutputErrorKind) {
+	t.Helper()
+	if result.Status != agent.RunnerStatusStructuredOutputError {
+		t.Fatalf("RunnerStatus 기대값 structured_output_error, 실제값 %q, err=%v", result.Status, result.Err)
+	}
+	if result.State.Status != agent.StatusFinal {
+		t.Errorf("AgentState.Status 기대값 final, 실제값 %q", result.State.Status)
+	}
+	if result.FinalText != finalText {
+		t.Errorf("FinalText 기대값 %q, 실제값 %q", finalText, result.FinalText)
+	}
+	if result.FinalMessage.Role != message.RoleAssistant {
+		t.Errorf("FinalMessage.Role 기대값 assistant, 실제값 %q", result.FinalMessage.Role)
+	}
+	if result.StructuredRaw != nil {
+		t.Errorf("실패 결과의 StructuredRaw는 nil이어야 하나 실제값 %s", result.StructuredRaw)
+	}
+	if result.StructuredValue != nil {
+		t.Errorf("실패 결과의 StructuredValue는 nil이어야 하나 실제값 %#v", result.StructuredValue)
+	}
+	var structuredErr *agent.StructuredOutputError
+	if !errors.As(result.Err, &structuredErr) {
+		t.Fatalf("result.Err는 StructuredOutputError로 확인되어야 한다: %v", result.Err)
+	}
+	if structuredErr.Kind != wantKind {
+		t.Errorf("StructuredOutputError.Kind 기대값 %q, 실제값 %q", wantKind, structuredErr.Kind)
+	}
 }

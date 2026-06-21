@@ -348,3 +348,17 @@ output contract를 비워 둔다. CLI에 structured output 입력 flag나 config
   수용하면서 기존 호출부를 안정적으로 유지한다.
 - 채택: **B**. Phase 5.2는 실행 표면을 정리하지만 기존 Agent loop 계약을 불필요하게 깨지 않는다는 SPEC 제약을
   따른다.
+
+### D8. output contract를 LLM 요청에도 반영할 것인가
+
+- 옵션 A: output contract를 Runner의 최종 응답 검증 기준으로만 사용한다.
+- 옵션 B: Runner가 output contract를 provider-neutral system instruction으로 LLM 요청에 포함하고, 같은 contract로
+  최종 응답을 검증한다.
+- 옵션 C: provider별 JSON mode, response format, constrained decoding으로 output contract를 전달한다.
+- 트레이드오프: A는 구현이 작지만 `OutputContract`라는 이름과 호출자 기대에 비해 LLM 생성 요청에 영향을 주지
+  않는다. C는 출력 품질을 높일 수 있지만 SPEC 제외 범위인 provider별 JSON mode와 constrained decoding으로
+  확장된다. B는 provider-neutral 계약을 유지하면서 contract를 요청과 검증 양쪽에 사용한다.
+- 채택: **B**. Runner는 output contract가 있을 때 built-in PreModel 단계에서 system message를 요청 앞쪽에
+  추가한다. 이 system message는 contract 이름, 설명, JSON Schema, "최종 assistant 응답은 JSON만 출력" 지시를
+  포함한다. 이 지시는 중간 tool call이나 tool result에는 structured output 검증을 적용하지 않고, 최종 응답
+  검증은 기존 D5 흐름을 그대로 사용한다.

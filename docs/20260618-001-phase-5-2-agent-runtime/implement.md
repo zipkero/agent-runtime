@@ -54,7 +54,7 @@
       `go test ./internal/agent/...` 통과.
   - 참조: SPEC §5.7 / ANALYSIS §2, §3, §5 D2, D4
 
-- [ ] task-005: structured output contract 파싱·검증
+- [x] task-005: structured output contract 파싱·검증
   - 목적: 호출자가 output contract(JSON Schema)를 지정하면 최종 assistant JSON text를 schema 기준으로 검증하고,
     성공과 실패를 text-only 결과, LLM 실패, tool 실패와 구분해 확인할 수 있게 한다.
   - 접근: `OutputContract`와 structured output helper를 `internal/agent`에 추가한다. Runner가 `StatusFinal` 이후
@@ -67,3 +67,18 @@
     - 확인: `internal/agent` 테스트에 structured output 성공, JSON 파싱 실패, schema 검증 실패, contract 미지정
       회귀 케이스를 추가하고 `go test ./internal/agent/...`, `go test ./...` 통과.
   - 참조: SPEC §5.8, §5.9, §5.10 / ANALYSIS §1, §2, §3, §5 D5, D6
+
+- [ ] task-006: output contract 요청 반영
+  - 목적: 호출자가 output contract를 지정하면 Runner가 최종 응답 검증만 수행하는 데 그치지 않고, LLM 요청에도
+    동일한 contract를 전달해 모델이 요구 JSON 구조를 생성하도록 유도한다.
+  - 접근: Runner가 output contract가 있을 때 provider-neutral built-in PreModel 단계를 구성해 `ChatRequest`
+    앞쪽에 system message를 추가한다. system message에는 contract 이름, 설명, JSON Schema, 최종 assistant
+    응답은 JSON만 출력해야 한다는 지시를 포함하고, provider별 JSON mode나 response format은 사용하지 않는다.
+  - 검증 조건:
+    - 결과: output contract 지정 시 실제 LLM client가 받는 첫 `ChatRequest.Messages`에 structured output system
+      message가 포함된다. 지정하지 않으면 기존 text-only 요청과 동일하다. tool call 이후 재호출되는 LLM 요청에도
+      같은 지시가 포함되고, structured output 검증 결과는 task-005와 같은 상태·에러 표면을 유지한다.
+    - 확인: `internal/agent` 테스트에 output contract 요청 지시 포함, contract 미지정 회귀, tool call 후 재요청
+      지시 유지, structured output 성공·실패 회귀 케이스를 추가하고 `go test ./internal/agent/...`,
+      `go test ./...` 통과.
+  - 참조: SPEC §5.8, §5.9, §5.10 / ANALYSIS §1, §2, §3, §5 D5, D6, D8
