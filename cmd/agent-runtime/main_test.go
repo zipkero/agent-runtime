@@ -18,12 +18,17 @@ import (
 
 type cliSeqStub struct {
 	responses []llm.ChatResponse
+	err       error
 	calls     int
 }
 
 func (s *cliSeqStub) Chat(ctx context.Context, _ llm.ChatRequest) (llm.ChatResponse, error) {
 	if err := ctx.Err(); err != nil {
 		return llm.ChatResponse{}, err
+	}
+	if s.err != nil {
+		s.calls++
+		return llm.ChatResponse{}, s.err
 	}
 	idx := s.calls
 	if idx >= len(s.responses) {
@@ -119,12 +124,16 @@ func captureStdoutStderr(t *testing.T, f func()) (string, string) {
 
 // TestRun_TextResponse_Final 은 text 응답이 오면 final 상태로 stdout에 출력되고 종료코드 0을 반환하는지 검증한다.
 func TestRun_TextResponse_Final(t *testing.T) {
-	stub := llm.NewStubClient(llm.ChatResponse{
-		Message: message.Message{
-			Role:    message.RoleAssistant,
-			Content: []message.ContentBlock{message.NewTextBlock("안녕하세요")},
+	stub := &cliSeqStub{
+		responses: []llm.ChatResponse{
+			{
+				Message: message.Message{
+					Role:    message.RoleAssistant,
+					Content: []message.ContentBlock{message.NewTextBlock("안녕하세요")},
+				},
+			},
 		},
-	})
+	}
 
 	var code int
 	out := captureStdout(t, func() {
@@ -298,7 +307,7 @@ func TestRun_MaxSteps_WritesToStderrAndExitsNonZero(t *testing.T) {
 			},
 		},
 	}
-	stub := llm.NewStubClient(toolCallResp)
+	stub := &cliSeqStub{responses: []llm.ChatResponse{toolCallResp}}
 
 	var code int
 	errOut := captureStderr(t, func() {
@@ -318,7 +327,7 @@ func TestRun_MaxSteps_WritesToStderrAndExitsNonZero(t *testing.T) {
 func TestRun_ChatError_WritesToStderrAndExitsNonZero(t *testing.T) {
 	// client 에러의 원인 텍스트가 stderr로 전파되는지만 확인한다.
 	causeErr := errors.New("chat 호출 실패")
-	stub := llm.NewErrorStubClient(causeErr)
+	stub := &cliSeqStub{err: causeErr}
 
 	var code int
 	errOut := captureStderr(t, func() {
@@ -334,12 +343,16 @@ func TestRun_ChatError_WritesToStderrAndExitsNonZero(t *testing.T) {
 }
 
 func TestRun_ContextCanceled_WritesToStderrAndExitsNonZero(t *testing.T) {
-	stub := llm.NewStubClient(llm.ChatResponse{
-		Message: message.Message{
-			Role:    message.RoleAssistant,
-			Content: []message.ContentBlock{message.NewTextBlock("응답")},
+	stub := &cliSeqStub{
+		responses: []llm.ChatResponse{
+			{
+				Message: message.Message{
+					Role:    message.RoleAssistant,
+					Content: []message.ContentBlock{message.NewTextBlock("응답")},
+				},
+			},
 		},
-	})
+	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // 이미 취소된 ctx를 전달해 ctx 취소 상황을 재현한다.
