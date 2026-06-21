@@ -36,6 +36,7 @@ type RunnerConfig struct {
 	MaxSteps    int
 	Registry    *tool.Registry
 	ToolTimeout time.Duration
+	Middleware  []Middleware
 	Hook        ReflectionHook
 }
 
@@ -46,6 +47,7 @@ type Runner struct {
 	maxSteps    int
 	registry    *tool.Registry
 	toolTimeout time.Duration
+	middleware  []Middleware
 	hook        ReflectionHook
 }
 
@@ -69,13 +71,17 @@ func NewRunner(cfg RunnerConfig) (*Runner, error) {
 		maxSteps:    cfg.MaxSteps,
 		registry:    cfg.Registry,
 		toolTimeout: cfg.ToolTimeout,
+		middleware:  append([]Middleware(nil), cfg.Middleware...),
 		hook:        cfg.Hook,
 	}, nil
 }
 
 // Run 은 기존 Agent graph loop를 실행하고 호출자 친화적인 RunnerResult로 매핑한다.
 func (r *Runner) Run(ctx context.Context, prompt string) RunnerResult {
-	a := NewAgent(r.client, r.model, r.maxSteps, r.hook, r.registry, r.toolTimeout)
+	a := NewAgentWithOptions(r.client, r.model, r.maxSteps, r.registry, r.toolTimeout, AgentOptions{
+		Hook:       r.hook,
+		Middleware: r.middleware,
+	})
 	state := a.Run(ctx, prompt)
 
 	result := RunnerResult{State: state}

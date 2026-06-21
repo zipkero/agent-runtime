@@ -27,7 +27,7 @@
       ./cmd/agent-runtime/...` 및 `go test ./...` 통과.
   - 참조: SPEC §5.3, §5.10 / ANALYSIS §1, §2, §3, §4
 
-- [ ] task-003: pre/post model middleware 성공 경로
+- [x] task-003: pre/post model middleware 성공 경로
   - 목적: middleware가 LLM 호출 전 요청과 LLM 호출 후 응답을 등록 순서대로 관찰·변경하고, 변경 결과가 실제
     LLM 호출과 Agent state에 반영되게 한다.
   - 접근: `internal/agent`에 `Middleware`, `PreModelInput`, `PostModelInput` 계약과 Agent 옵션 경로를 추가한다.

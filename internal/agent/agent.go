@@ -56,12 +56,41 @@ func (s AgentState) FinalMessage() (message.Message, bool) {
 // nil을 주입하면 no-op으로 동작하며, loop가 항상 정상 진행된다.
 type ReflectionHook func(step int, state AgentState)
 
+// Middleware 는 Agent의 model 호출 전후에서 요청과 응답을 관찰하거나 변경하는 hook이다.
+type Middleware interface {
+	PreModel(ctx context.Context, in PreModelInput) (llm.ChatRequest, error)
+	PostModel(ctx context.Context, in PostModelInput) (llm.ChatResponse, error)
+}
+
+// PreModelInput 은 LLM 호출 직전에 middleware가 관찰하는 실행 context다.
+type PreModelInput struct {
+	Step    int
+	State   AgentState
+	Request llm.ChatRequest
+}
+
+// PostModelInput 은 LLM 호출 직후 middleware가 관찰하는 실행 context다.
+type PostModelInput struct {
+	Step     int
+	State    AgentState
+	Request  llm.ChatRequest
+	Response llm.ChatResponse
+	Err      error
+}
+
+// AgentOptions 는 기존 NewAgent 생성자 밖에서 확장 실행 옵션을 전달한다.
+type AgentOptions struct {
+	Hook       ReflectionHook
+	Middleware []Middleware
+}
+
 // Agent 는 주입된 LLMClient를 들고 AgentState 위에서 ReAct loop를 실행하는 단위다.
 type Agent struct {
 	client      llm.LLMClient
 	model       string
 	maxSteps    int
 	hook        ReflectionHook
+	middleware  []Middleware
 	registry    *tool.Registry   // tool 이름 조회와 schema 수집에 사용한다. nil이면 tool 미사용.
 	toolTimeout time.Duration    // per-tool 실행 deadline. 0이면 context 상속만 따른다.
 	dispatcher  *tool.Dispatcher // registry가 non-nil일 때 생성되며 tool_call 실행을 위임한다.
@@ -77,11 +106,17 @@ const (
 // registry가 nil이면 tool schema를 LLM에 싣지 않고 tool_call 결과도 처리하지 않는다.
 // toolTimeout이 0이면 per-tool deadline을 별도로 적용하지 않는다(loop ctx 상속만).
 func NewAgent(client llm.LLMClient, model string, maxSteps int, hook ReflectionHook, registry *tool.Registry, toolTimeout time.Duration) *Agent {
+	return NewAgentWithOptions(client, model, maxSteps, registry, toolTimeout, AgentOptions{Hook: hook})
+}
+
+// NewAgentWithOptions 는 middleware 같은 확장 옵션을 포함해 Agent를 생성한다.
+func NewAgentWithOptions(client llm.LLMClient, model string, maxSteps int, registry *tool.Registry, toolTimeout time.Duration, options AgentOptions) *Agent {
 	a := &Agent{
 		client:      client,
 		model:       model,
 		maxSteps:    maxSteps,
-		hook:        hook,
+		hook:        options.Hook,
+		middleware:  append([]Middleware(nil), options.Middleware...),
 		registry:    registry,
 		toolTimeout: toolTimeout,
 	}
@@ -182,9 +217,32 @@ func (n *llmNode) Run(ctx context.Context, state AgentState) (graph.NodeResult[A
 	if a.registry != nil {
 		req.Tools = a.registry.Specs()
 	}
+	for _, middleware := range a.middleware {
+		var err error
+		req, err = middleware.PreModel(ctx, PreModelInput{
+			Step:    state.Steps,
+			State:   state,
+			Request: req,
+		})
+		if err != nil {
+			return graph.NodeResult[AgentState]{}, err
+		}
+	}
+
 	resp, err := a.client.Chat(ctx, req)
 	if err != nil {
 		return graph.NodeResult[AgentState]{}, err
+	}
+	for _, middleware := range a.middleware {
+		resp, err = middleware.PostModel(ctx, PostModelInput{
+			Step:     state.Steps,
+			State:    state,
+			Request:  req,
+			Response: resp,
+		})
+		if err != nil {
+			return graph.NodeResult[AgentState]{}, err
+		}
 	}
 
 	state.Messages = append(state.Messages, resp.Message)
