@@ -197,7 +197,7 @@ func TestRunner_MiddlewareOrderAndChangePropagation(t *testing.T) {
 	}
 }
 
-// TestRunner_PreModelMiddlewareErrorSkipsLLMCall 은 pre hook 실패가 LLM 호출 전 실행을 중단하고
+// TestRunner_PreModelMiddlewareErrorSkipsLLMCall 은 PreModel middleware 실패가 LLM 호출 전 실행을 중단하고
 // 실패 stage와 middleware index를 호출자가 확인할 수 있어야 한다는 계약을 검증한다.
 func TestRunner_PreModelMiddlewareErrorSkipsLLMCall(t *testing.T) {
 	sentinelErr := errors.New("pre middleware 실패")
@@ -245,7 +245,7 @@ func TestRunner_PreModelMiddlewareErrorSkipsLLMCall(t *testing.T) {
 	}
 }
 
-// TestRunner_PostModelMiddlewareErrorStopsBeforeStateAccumulation 은 post hook 실패가 LLM 호출 이후,
+// TestRunner_PostModelMiddlewareErrorStopsBeforeStateAccumulation 은 PostModel middleware 실패가 LLM 호출 이후,
 // assistant 응답 누적 이전에 실행을 실패로 전환해야 한다는 계약을 검증한다.
 func TestRunner_PostModelMiddlewareErrorStopsBeforeStateAccumulation(t *testing.T) {
 	sentinelErr := errors.New("post middleware 실패")
@@ -298,7 +298,7 @@ func TestRunner_PostModelMiddlewareErrorStopsBeforeStateAccumulation(t *testing.
 	}
 }
 
-// TestRunner_LLMErrorIsObservedByPostModelAndPropagated 는 LLM error를 post hook에서 관찰할 수 있지만
+// TestRunner_LLMErrorIsObservedByPostModelAndPropagated 는 LLM error를 PostModel middleware에서 관찰할 수 있지만
 // middleware error로 오분류하지 않고 원래 error로 전파해야 한다는 계약을 검증한다.
 func TestRunner_LLMErrorIsObservedByPostModelAndPropagated(t *testing.T) {
 	sentinelErr := errors.New("LLM 호출 실패")
