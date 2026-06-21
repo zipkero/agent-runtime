@@ -4,6 +4,7 @@ package agent
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/zipkero/agent-runtime/internal/graph"
@@ -60,6 +61,29 @@ type ReflectionHook func(step int, state AgentState)
 type Middleware interface {
 	PreModel(ctx context.Context, in PreModelInput) (llm.ChatRequest, error)
 	PostModel(ctx context.Context, in PostModelInput) (llm.ChatResponse, error)
+}
+
+// MiddlewareStage 는 middleware 실패가 발생한 model 호출 전후 위치를 나타낸다.
+type MiddlewareStage string
+
+const (
+	MiddlewareStagePreModel  MiddlewareStage = "pre_model"
+	MiddlewareStagePostModel MiddlewareStage = "post_model"
+)
+
+// MiddlewareError 는 실패한 middleware의 stage와 등록 위치를 호출자에게 전달한다.
+type MiddlewareError struct {
+	Stage MiddlewareStage
+	Index int
+	Err   error
+}
+
+func (e *MiddlewareError) Error() string {
+	return fmt.Sprintf("agent middleware %s[%d]: %v", e.Stage, e.Index, e.Err)
+}
+
+func (e *MiddlewareError) Unwrap() error {
+	return e.Err
 }
 
 // PreModelInput 은 LLM 호출 직전에 middleware가 관찰하는 실행 context다.
@@ -217,7 +241,7 @@ func (n *llmNode) Run(ctx context.Context, state AgentState) (graph.NodeResult[A
 	if a.registry != nil {
 		req.Tools = a.registry.Specs()
 	}
-	for _, middleware := range a.middleware {
+	for i, middleware := range a.middleware {
 		var err error
 		req, err = middleware.PreModel(ctx, PreModelInput{
 			Step:    state.Steps,
@@ -225,15 +249,34 @@ func (n *llmNode) Run(ctx context.Context, state AgentState) (graph.NodeResult[A
 			Request: req,
 		})
 		if err != nil {
-			return graph.NodeResult[AgentState]{}, err
+			return graph.NodeResult[AgentState]{}, &MiddlewareError{
+				Stage: MiddlewareStagePreModel,
+				Index: i,
+				Err:   err,
+			}
 		}
 	}
 
 	resp, err := a.client.Chat(ctx, req)
 	if err != nil {
+		for i, middleware := range a.middleware {
+			_, middlewareErr := middleware.PostModel(ctx, PostModelInput{
+				Step:    state.Steps,
+				State:   state,
+				Request: req,
+				Err:     err,
+			})
+			if middlewareErr != nil {
+				return graph.NodeResult[AgentState]{}, &MiddlewareError{
+					Stage: MiddlewareStagePostModel,
+					Index: i,
+					Err:   middlewareErr,
+				}
+			}
+		}
 		return graph.NodeResult[AgentState]{}, err
 	}
-	for _, middleware := range a.middleware {
+	for i, middleware := range a.middleware {
 		resp, err = middleware.PostModel(ctx, PostModelInput{
 			Step:     state.Steps,
 			State:    state,
@@ -241,7 +284,11 @@ func (n *llmNode) Run(ctx context.Context, state AgentState) (graph.NodeResult[A
 			Response: resp,
 		})
 		if err != nil {
-			return graph.NodeResult[AgentState]{}, err
+			return graph.NodeResult[AgentState]{}, &MiddlewareError{
+				Stage: MiddlewareStagePostModel,
+				Index: i,
+				Err:   err,
+			}
 		}
 	}
 

@@ -40,7 +40,7 @@
       케이스를 추가하고 `go test ./internal/agent/...` 통과.
   - 참조: SPEC §5.4, §5.5, §5.6 / ANALYSIS §1, §2, §3, §5 D2, D3
 
-- [ ] task-004: middleware error 구분과 전파
+- [x] task-004: middleware error 구분과 전파
   - 목적: middleware 실패를 LLM 호출 전 실패와 LLM 호출 후 실패로 구분해 호출자가 원인 stage와 middleware 위치를
     확인할 수 있게 한다.
   - 접근: `MiddlewareStage`, `MiddlewareError` 또는 동등한 typed error를 추가하고, pre hook 실패는 LLM 호출 없이

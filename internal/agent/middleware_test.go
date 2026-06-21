@@ -2,6 +2,7 @@ package agent_test
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 
@@ -193,5 +194,155 @@ func TestRunner_MiddlewareOrderAndChangePropagation(t *testing.T) {
 	}
 	if result.FinalText != "post-2 응답" {
 		t.Errorf("FinalText 기대값 %q, 실제값 %q", "post-2 응답", result.FinalText)
+	}
+}
+
+// TestRunner_PreModelMiddlewareErrorSkipsLLMCall 은 pre hook 실패가 LLM 호출 전 실행을 중단하고
+// 실패 stage와 middleware index를 호출자가 확인할 수 있어야 한다는 계약을 검증한다.
+func TestRunner_PreModelMiddlewareErrorSkipsLLMCall(t *testing.T) {
+	sentinelErr := errors.New("pre middleware 실패")
+	stub := &seqStub{responses: []llm.ChatResponse{textResponse("호출되면 안 됨")}}
+	first := middlewareStub{}
+	second := middlewareStub{
+		pre: func(_ context.Context, in agent.PreModelInput) (llm.ChatRequest, error) {
+			return in.Request, sentinelErr
+		},
+	}
+	runner, err := agent.NewRunner(agent.RunnerConfig{
+		Client:     stub,
+		Model:      "stub-model",
+		MaxSteps:   5,
+		Registry:   tool.NewRegistry(),
+		Middleware: []agent.Middleware{first, second},
+	})
+	if err != nil {
+		t.Fatalf("NewRunner 실패: %v", err)
+	}
+
+	result := runner.Run(context.Background(), "pre middleware error 테스트")
+
+	if result.Status != agent.RunnerStatusAgentError {
+		t.Fatalf("RunnerStatus 기대값 agent_error, 실제값 %q", result.Status)
+	}
+	if stub.calls != 0 {
+		t.Fatalf("pre middleware error 후 LLM 호출 횟수 기대값 0, 실제값 %d", stub.calls)
+	}
+	var middlewareErr *agent.MiddlewareError
+	if !errors.As(result.Err, &middlewareErr) {
+		t.Fatalf("result.Err는 MiddlewareError로 확인되어야 한다: %v", result.Err)
+	}
+	if middlewareErr.Stage != agent.MiddlewareStagePreModel {
+		t.Errorf("MiddlewareError.Stage 기대값 %q, 실제값 %q", agent.MiddlewareStagePreModel, middlewareErr.Stage)
+	}
+	if middlewareErr.Index != 1 {
+		t.Errorf("MiddlewareError.Index 기대값 1, 실제값 %d", middlewareErr.Index)
+	}
+	if !errors.Is(result.Err, sentinelErr) {
+		t.Errorf("errors.Is 실패: result.Err=%v, 기대값 %v", result.Err, sentinelErr)
+	}
+	if len(result.State.Messages) != 1 {
+		t.Fatalf("pre middleware error state 메시지 수 기대값 1, 실제값 %d", len(result.State.Messages))
+	}
+}
+
+// TestRunner_PostModelMiddlewareErrorStopsBeforeStateAccumulation 은 post hook 실패가 LLM 호출 이후,
+// assistant 응답 누적 이전에 실행을 실패로 전환해야 한다는 계약을 검증한다.
+func TestRunner_PostModelMiddlewareErrorStopsBeforeStateAccumulation(t *testing.T) {
+	sentinelErr := errors.New("post middleware 실패")
+	stub := &seqStub{responses: []llm.ChatResponse{textResponse("원본 응답")}}
+	middleware := middlewareStub{
+		post: func(_ context.Context, in agent.PostModelInput) (llm.ChatResponse, error) {
+			if in.Err != nil {
+				t.Errorf("성공 LLM 호출 뒤 PostModel Err는 nil이어야 하나 Err=%v", in.Err)
+			}
+			return in.Response, sentinelErr
+		},
+	}
+	runner, err := agent.NewRunner(agent.RunnerConfig{
+		Client:     stub,
+		Model:      "stub-model",
+		MaxSteps:   5,
+		Registry:   tool.NewRegistry(),
+		Middleware: []agent.Middleware{middleware},
+	})
+	if err != nil {
+		t.Fatalf("NewRunner 실패: %v", err)
+	}
+
+	result := runner.Run(context.Background(), "post middleware error 테스트")
+
+	if result.Status != agent.RunnerStatusAgentError {
+		t.Fatalf("RunnerStatus 기대값 agent_error, 실제값 %q", result.Status)
+	}
+	if stub.calls != 1 {
+		t.Fatalf("post middleware error 전 LLM 호출 횟수 기대값 1, 실제값 %d", stub.calls)
+	}
+	var middlewareErr *agent.MiddlewareError
+	if !errors.As(result.Err, &middlewareErr) {
+		t.Fatalf("result.Err는 MiddlewareError로 확인되어야 한다: %v", result.Err)
+	}
+	if middlewareErr.Stage != agent.MiddlewareStagePostModel {
+		t.Errorf("MiddlewareError.Stage 기대값 %q, 실제값 %q", agent.MiddlewareStagePostModel, middlewareErr.Stage)
+	}
+	if middlewareErr.Index != 0 {
+		t.Errorf("MiddlewareError.Index 기대값 0, 실제값 %d", middlewareErr.Index)
+	}
+	if !errors.Is(result.Err, sentinelErr) {
+		t.Errorf("errors.Is 실패: result.Err=%v, 기대값 %v", result.Err, sentinelErr)
+	}
+	if len(result.State.Messages) != 1 {
+		t.Fatalf("post middleware error 전 state 메시지 수 기대값 1, 실제값 %d", len(result.State.Messages))
+	}
+	if result.FinalText != "" {
+		t.Errorf("agent_error 결과에서 FinalText는 비어야 하나 실제값 %q", result.FinalText)
+	}
+}
+
+// TestRunner_LLMErrorIsObservedByPostModelAndPropagated 는 LLM error를 post hook에서 관찰할 수 있지만
+// middleware error로 오분류하지 않고 원래 error로 전파해야 한다는 계약을 검증한다.
+func TestRunner_LLMErrorIsObservedByPostModelAndPropagated(t *testing.T) {
+	sentinelErr := errors.New("LLM 호출 실패")
+	stub := &seqStub{err: sentinelErr}
+	observed := false
+	middleware := middlewareStub{
+		post: func(_ context.Context, in agent.PostModelInput) (llm.ChatResponse, error) {
+			observed = true
+			if !errors.Is(in.Err, sentinelErr) {
+				t.Errorf("PostModelInput.Err 기대값 %v, 실제값 %v", sentinelErr, in.Err)
+			}
+			if len(in.Response.Message.Content) != 0 {
+				t.Errorf("LLM error 경로의 Response는 비어야 한다: %#v", in.Response)
+			}
+			return in.Response, nil
+		},
+	}
+	runner, err := agent.NewRunner(agent.RunnerConfig{
+		Client:     stub,
+		Model:      "stub-model",
+		MaxSteps:   5,
+		Registry:   tool.NewRegistry(),
+		Middleware: []agent.Middleware{middleware},
+	})
+	if err != nil {
+		t.Fatalf("NewRunner 실패: %v", err)
+	}
+
+	result := runner.Run(context.Background(), "LLM error 관찰 테스트")
+
+	if result.Status != agent.RunnerStatusAgentError {
+		t.Fatalf("RunnerStatus 기대값 agent_error, 실제값 %q", result.Status)
+	}
+	if !observed {
+		t.Fatal("LLM error가 PostModel middleware에 전달되지 않았다")
+	}
+	if !errors.Is(result.Err, sentinelErr) {
+		t.Errorf("errors.Is 실패: result.Err=%v, 기대값 %v", result.Err, sentinelErr)
+	}
+	var middlewareErr *agent.MiddlewareError
+	if errors.As(result.Err, &middlewareErr) {
+		t.Fatalf("LLM error 자체는 MiddlewareError로 분류되면 안 된다: %#v", middlewareErr)
+	}
+	if len(result.State.Messages) != 1 {
+		t.Fatalf("LLM error state 메시지 수 기대값 1, 실제값 %d", len(result.State.Messages))
 	}
 }
