@@ -2,11 +2,15 @@ package agent
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/santhosh-tekuri/jsonschema/v6"
+	"github.com/zipkero/agent-runtime/internal/llm"
+	"github.com/zipkero/agent-runtime/internal/message"
 )
 
 // OutputContract 는 Runner가 최종 assistant text에 적용할 structured output 계약이다.
@@ -50,6 +54,47 @@ func cloneOutputContract(contract *OutputContract) *OutputContract {
 	clone := *contract
 	clone.Schema = append(json.RawMessage(nil), contract.Schema...)
 	return &clone
+}
+
+type outputInstructionMiddleware struct {
+	contract OutputContract
+}
+
+func (m outputInstructionMiddleware) PreModel(_ context.Context, in PreModelInput) (llm.ChatRequest, error) {
+	req := in.Request
+	req.Messages = append([]message.Message{{
+		Role:    message.RoleSystem,
+		Content: []message.ContentBlock{message.NewTextBlock(outputInstructionText(m.contract))},
+	}}, req.Messages...)
+	return req, nil
+}
+
+func (m outputInstructionMiddleware) PostModel(_ context.Context, in PostModelInput) (llm.ChatResponse, error) {
+	return in.Response, nil
+}
+
+func outputInstructionText(contract OutputContract) string {
+	var b strings.Builder
+	b.WriteString("You must produce the final assistant response as JSON only.\n")
+	b.WriteString("Do not wrap the final JSON in Markdown or add explanatory text.\n")
+	if contract.Name != "" {
+		b.WriteString("Output contract name: ")
+		b.WriteString(contract.Name)
+		b.WriteString("\n")
+	}
+	if contract.Description != "" {
+		b.WriteString("Output contract description: ")
+		b.WriteString(contract.Description)
+		b.WriteString("\n")
+	}
+	b.WriteString("JSON Schema:\n")
+	var compact bytes.Buffer
+	if err := json.Compact(&compact, contract.Schema); err == nil {
+		b.Write(compact.Bytes())
+	} else {
+		b.Write(bytes.TrimSpace(contract.Schema))
+	}
+	return b.String()
 }
 
 func parseStructuredOutput(text string, contract OutputContract) (json.RawMessage, any, error) {

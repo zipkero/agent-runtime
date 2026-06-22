@@ -68,7 +68,7 @@
       회귀 케이스를 추가하고 `go test ./internal/agent/...`, `go test ./...` 통과.
   - 참조: SPEC §5.8, §5.9, §5.10 / ANALYSIS §1, §2, §3, §5 D5, D6
 
-- [ ] task-006: output contract 요청 반영
+- [x] task-006: output contract 요청 반영
   - 목적: 호출자가 output contract를 지정하면 Runner가 최종 응답 검증만 수행하는 데 그치지 않고, LLM 요청에도
     동일한 contract를 전달해 모델이 요구 JSON 구조를 생성하도록 유도한다.
   - 접근: Runner가 output contract가 있을 때 provider-neutral built-in PreModel 단계를 구성해 `ChatRequest`

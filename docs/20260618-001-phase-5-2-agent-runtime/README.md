@@ -7,7 +7,7 @@ runner, model 호출 전후 middleware hook, structured output contract를 갖�
 ## 상태
 - [x] SPEC
 - [x] ANALYSIS
-- [ ] IMPLEMENT
+- [x] IMPLEMENT
 
 ## 문서
 - [spec.md](./spec.md)
@@ -20,3 +20,4 @@ runner, model 호출 전후 middleware hook, structured output contract를 갖�
 - 2026-06-19: IMPLEMENT 체크리스트 작성
 - 2026-06-21: IMPLEMENT 완료
 - 2026-06-21: output contract 요청 반영 Task 추가로 IMPLEMENT 진행 상태 전환
+- 2026-06-22: IMPLEMENT 완료

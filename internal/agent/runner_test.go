@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -54,6 +55,150 @@ func TestRunner_NoOutputContractUsesTextOnlyResult(t *testing.T) {
 	}
 	if result.StructuredValue != nil {
 		t.Errorf("output contract 없는 결과의 StructuredValue는 nil이어야 하나 실제값 %#v", result.StructuredValue)
+	}
+}
+
+// TestRunner_OutputContractAddsSystemInstruction 는 output contract가 있으면 Runner가 실제 LLM 요청 앞쪽에
+// structured output system message를 추가해야 한다는 계약을 검증한다.
+func TestRunner_OutputContractAddsSystemInstruction(t *testing.T) {
+	const finalText = `{"answer":"완료"}`
+	capturer := &capturingStub{
+		seqStub: seqStub{responses: []llm.ChatResponse{textResponse(finalText)}},
+	}
+	runner, err := agent.NewRunner(agent.RunnerConfig{
+		Client:   capturer,
+		Model:    "stub-model",
+		MaxSteps: 5,
+		Registry: tool.NewRegistry(),
+		Output: &agent.OutputContract{
+			Name:        "answer_result",
+			Description: "테스트용 구조화 응답",
+			Schema:      json.RawMessage(`{"type":"object","required":["answer"],"properties":{"answer":{"type":"string"}}}`),
+		},
+	})
+	if err != nil {
+		t.Fatalf("NewRunner 실패: %v", err)
+	}
+
+	result := runner.Run(context.Background(), "structured output 요청 지시 테스트")
+
+	if result.Status != agent.RunnerStatusSuccess {
+		t.Fatalf("RunnerStatus 기대값 success, 실제값 %q, err=%v", result.Status, result.Err)
+	}
+	if len(capturer.capturedRequests) != 1 {
+		t.Fatalf("ChatRequest 캡처 수 기대값 1, 실제값 %d", len(capturer.capturedRequests))
+	}
+	assertStructuredOutputInstruction(t, capturer.capturedRequests[0], "answer_result")
+}
+
+// TestRunner_OutputContractInstructionRunsBeforeUserMiddleware 는 built-in PreModel 단계가 사용자 middleware보다
+// 먼저 실행되어 사용자 middleware도 output contract 지시가 포함된 요청을 관찰해야 한다는 계약을 검증한다.
+func TestRunner_OutputContractInstructionRunsBeforeUserMiddleware(t *testing.T) {
+	const finalText = `{"answer":"완료"}`
+	observed := false
+	userMiddleware := middlewareStub{
+		pre: func(_ context.Context, in agent.PreModelInput) (llm.ChatRequest, error) {
+			observed = true
+			assertStructuredOutputInstruction(t, in.Request, "answer_result")
+			return in.Request, nil
+		},
+	}
+	runner, err := agent.NewRunner(agent.RunnerConfig{
+		Client:     &seqStub{responses: []llm.ChatResponse{textResponse(finalText)}},
+		Model:      "stub-model",
+		MaxSteps:   5,
+		Registry:   tool.NewRegistry(),
+		Middleware: []agent.Middleware{userMiddleware},
+		Output: &agent.OutputContract{
+			Name:   "answer_result",
+			Schema: json.RawMessage(`{"type":"object","required":["answer"],"properties":{"answer":{"type":"string"}}}`),
+		},
+	})
+	if err != nil {
+		t.Fatalf("NewRunner 실패: %v", err)
+	}
+
+	result := runner.Run(context.Background(), "structured output middleware 순서 테스트")
+
+	if result.Status != agent.RunnerStatusSuccess {
+		t.Fatalf("RunnerStatus 기대값 success, 실제값 %q, err=%v", result.Status, result.Err)
+	}
+	if !observed {
+		t.Fatal("사용자 middleware가 output contract 지시가 포함된 요청을 관찰하지 못했다")
+	}
+}
+
+// TestRunner_NoOutputContractDoesNotAddSystemInstruction 는 output contract가 없으면 Runner가 기존 text-only
+// 요청 메시지 구성을 변경하지 않아야 한다는 회귀 조건을 검증한다.
+func TestRunner_NoOutputContractDoesNotAddSystemInstruction(t *testing.T) {
+	capturer := &capturingStub{
+		seqStub: seqStub{responses: []llm.ChatResponse{textResponse("최종 답")}},
+	}
+	runner, err := agent.NewRunner(agent.RunnerConfig{
+		Client:   capturer,
+		Model:    "stub-model",
+		MaxSteps: 5,
+		Registry: tool.NewRegistry(),
+	})
+	if err != nil {
+		t.Fatalf("NewRunner 실패: %v", err)
+	}
+
+	result := runner.Run(context.Background(), "contract 미지정 요청 테스트")
+
+	if result.Status != agent.RunnerStatusSuccess {
+		t.Fatalf("RunnerStatus 기대값 success, 실제값 %q, err=%v", result.Status, result.Err)
+	}
+	if len(capturer.capturedRequests) != 1 {
+		t.Fatalf("ChatRequest 캡처 수 기대값 1, 실제값 %d", len(capturer.capturedRequests))
+	}
+	req := capturer.capturedRequests[0]
+	if len(req.Messages) != 1 {
+		t.Fatalf("contract 미지정 요청 메시지 수 기대값 1, 실제값 %d", len(req.Messages))
+	}
+	if req.Messages[0].Role != message.RoleUser {
+		t.Errorf("contract 미지정 요청 첫 메시지 Role 기대값 user, 실제값 %q", req.Messages[0].Role)
+	}
+}
+
+// TestRunner_OutputContractInstructionPersistsAfterToolCall 는 tool call 이후 재요청되는 LLM 요청에도
+// structured output system message가 계속 포함되어야 한다는 계약을 검증한다.
+func TestRunner_OutputContractInstructionPersistsAfterToolCall(t *testing.T) {
+	const finalText = `{"answer":"도구 완료"}`
+	ft := &fakeTool{name: "lookup", result: "검색 결과"}
+	reg := tool.NewRegistry()
+	if err := reg.Register(ft); err != nil {
+		t.Fatalf("tool 등록 실패: %v", err)
+	}
+	capturer := &capturingStub{
+		seqStub: seqStub{responses: []llm.ChatResponse{toolCallResponse(), textResponse(finalText)}},
+	}
+	runner, err := agent.NewRunner(agent.RunnerConfig{
+		Client:   capturer,
+		Model:    "stub-model",
+		MaxSteps: 5,
+		Registry: reg,
+		Output: &agent.OutputContract{
+			Name:   "answer_result",
+			Schema: json.RawMessage(`{"type":"object","required":["answer"],"properties":{"answer":{"type":"string"}}}`),
+		},
+	})
+	if err != nil {
+		t.Fatalf("NewRunner 실패: %v", err)
+	}
+
+	result := runner.Run(context.Background(), "structured output tool call 테스트")
+
+	if result.Status != agent.RunnerStatusSuccess {
+		t.Fatalf("RunnerStatus 기대값 success, 실제값 %q, err=%v", result.Status, result.Err)
+	}
+	if len(capturer.capturedRequests) != 2 {
+		t.Fatalf("ChatRequest 캡처 수 기대값 2, 실제값 %d", len(capturer.capturedRequests))
+	}
+	assertStructuredOutputInstruction(t, capturer.capturedRequests[0], "answer_result")
+	assertStructuredOutputInstruction(t, capturer.capturedRequests[1], "answer_result")
+	if ft.calls != 1 {
+		t.Errorf("fakeTool.Execute 호출 횟수 기대값 1, 실제값 %d", ft.calls)
 	}
 }
 
@@ -325,5 +470,30 @@ func assertStructuredOutputError(t *testing.T, result agent.RunnerResult, finalT
 	}
 	if structuredErr.Kind != wantKind {
 		t.Errorf("StructuredOutputError.Kind 기대값 %q, 실제값 %q", wantKind, structuredErr.Kind)
+	}
+}
+
+func assertStructuredOutputInstruction(t *testing.T, req llm.ChatRequest, contractName string) {
+	t.Helper()
+	if len(req.Messages) == 0 {
+		t.Fatal("ChatRequest.Messages가 비어 있다")
+	}
+	systemMsg := req.Messages[0]
+	if systemMsg.Role != message.RoleSystem {
+		t.Fatalf("structured output 지시는 첫 system message여야 한다. 실제 Role=%q", systemMsg.Role)
+	}
+	if len(systemMsg.Content) == 0 || systemMsg.Content[0].Type != message.BlockTypeText {
+		t.Fatalf("structured output system message에 text block이 없다: %#v", systemMsg.Content)
+	}
+	text := systemMsg.Content[0].Text
+	for _, want := range []string{
+		"final assistant response as JSON only",
+		contractName,
+		"JSON Schema:",
+		`"answer":{"type":"string"}`,
+	} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("structured output system message에 %q가 없다: %q", want, text)
+		}
 	}
 }

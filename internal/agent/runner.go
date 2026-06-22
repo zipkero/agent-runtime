@@ -86,9 +86,13 @@ func NewRunner(cfg RunnerConfig) (*Runner, error) {
 
 // Run 은 기존 Agent graph loop를 실행하고 호출자 친화적인 RunnerResult로 매핑한다.
 func (r *Runner) Run(ctx context.Context, prompt string) RunnerResult {
+	middleware := r.middleware
+	if r.output != nil {
+		middleware = append([]Middleware{outputInstructionMiddleware{contract: *r.output}}, middleware...)
+	}
 	a := NewAgentWithOptions(r.client, r.model, r.maxSteps, r.registry, r.toolTimeout, AgentOptions{
 		Hook:       r.hook,
-		Middleware: r.middleware,
+		Middleware: middleware,
 	})
 	state := a.Run(ctx, prompt)
 
