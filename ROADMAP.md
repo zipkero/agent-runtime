@@ -221,8 +221,8 @@ Tool Calling이 가능한 Single Agent를 구현한다.
 
 ### 구현 범위 (하위 분할)
 
-이 Phase는 이질적인 Tool과 Agent 실행 구조가 섞여 있어 feature-dir와 implement 사이클을 두 갈래로 나눈다.
-소수점 번호는 5.1을 먼저 구현하고 5.2가 그 위에서 Single Agent 실행을 완성하는 선행 의존을 뜻한다.
+이 Phase는 이질적인 Tool과 Agent 실행 구조가 섞여 있어 feature-dir와 implement 사이클을 세 갈래로 나눈다.
+소수점 번호는 5.1 → 5.2 → 5.3 순서의 선행 의존을 뜻한다.
 
 #### Phase 5.1 — Tool 묶음
 
@@ -236,7 +236,14 @@ Tool Calling이 가능한 Single Agent를 구현한다.
 * Structured Output
 * Single Agent runner
 * Graph 기반 Single Agent 실행
-* streaming response optional
+
+#### Phase 5.3 — Streaming Agent Response (5.2 이후)
+
+* Provider-neutral streaming LLM contract
+* Runner streaming event
+* CLI streaming 출력
+* streaming 완료 후 final response 조립
+* Structured Output final 검증과 streaming 관계 정리
 
 ### 주요 패키지
 
@@ -259,6 +266,7 @@ internal/graph
 * Agent가 File Tool을 호출할 수 있다.
 * Agent가 제한된 Code Execution Tool을 호출할 수 있다.
 * Structured Output을 파싱할 수 있다.
+* Streaming mode에서 model text chunk를 순차적으로 확인할 수 있다.
 
 ---
 
