@@ -2,7 +2,7 @@
 
 ## 체크리스트
 
-- [ ] task-001: Provider-neutral streaming LLM contract
+- [x] task-001: Provider-neutral streaming LLM contract
   - 목적: 호출자가 provider별 SDK나 wire format을 모르고도 model text chunk와 완료 이벤트를 순차적으로 받을 수
     있게 한다.
   - 접근: `internal/llm`에 기존 `LLMClient.Chat`을 유지한 채 `LLMStreamer`, `ChatStream`, `ChatStreamEvent`,
