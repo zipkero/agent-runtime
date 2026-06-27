@@ -6,6 +6,10 @@
 
 대신 하나의 Go Agent Runtime 코드베이스를 계속 개선하며, 각 단계의 개념을 Runtime 기능으로 흡수합니다.
 
+도착점은 **여러 Agent가 역할을 나눠 협력하고, 그 Agent들을 local 실행과 A2A 기반 remote 실행으로 동일하게
+다루는 Orchestrator 기반 Multi-Agent System**입니다. 앞 단계(LLM·ReAct·Tool·Graph·RAG·Memory)는 이
+도착점을 떠받치는 구성 요소입니다.
+
 ## 진행 원칙
 
 ```text
@@ -16,7 +20,27 @@ LangChain / LangGraph는 사용하지 않는다. (그 외 SDK는 사용한다)
 진행 상태는 docs, commit, tag로 추적한다.
 ```
 
-## Phase 0. Project Foundation
+## 진행 현황
+
+```text
+[x] Phase 0  Project Foundation
+[x] Phase 1  LLM Client          (Claude / GPT + Ollama 로컬 provider)
+[x] Phase 2  Agent State / ReAct
+[x] Phase 3  Tool Calling Runtime
+[x] Phase 4  Graph Runtime
+[x] Phase 5  Single Agent Runtime (5.1 Tool 묶음 / 5.2 실행 구조 / 5.3 Streaming)
+[ ] Phase 6  RAG Runtime
+[ ] Phase 7  Memory Runtime
+[ ] Phase 8  Multi-Agent Runtime
+[ ] Phase 9  MCP Adapter
+[ ] Phase 10 A2A Adapter
+[ ] Phase 11 Orchestrator Runtime
+[ ] Phase 12 Runtime Refinement
+```
+
+---
+
+## Phase 0. Project Foundation — 완료
 
 ### 목표
 
@@ -48,7 +72,7 @@ internal/config
 
 ---
 
-## Phase 1. LLM 기반 의사결정 구조
+## Phase 1. LLM 기반 의사결정 구조 — 완료
 
 ### 목표
 
@@ -62,7 +86,8 @@ LLM을 Agent Runtime의 판단 주체로 사용하기 위한 기본 추상화를
 * `Message`
 * `ToolCall`
 * `ToolResult`
-* 실제 Claude / GPT API를 호출하는 client (초기에는 Claude 우선)
+* 실제 Claude / GPT API를 호출하는 client
+* 로컬 모델 provider (Ollama, tool calling 포함)
 * 테스트용 stub client
 * model / api key config
 * context timeout 처리
@@ -85,12 +110,12 @@ internal/config
 ### 완료 기준
 
 * CLI에서 사용자 입력을 받아 실제 LLM 응답을 받을 수 있다.
-* LLM Provider 교체 가능성을 interface로 표현한다.
+* LLM Provider 교체 가능성을 interface로 표현한다. (Claude / GPT / Ollama)
 * request timeout이 동작한다.
 
 ---
 
-## Phase 2. Agent State와 ReAct 기초
+## Phase 2. Agent State와 ReAct 기초 — 완료
 
 ### 목표
 
@@ -129,7 +154,7 @@ internal/message
 
 ---
 
-## Phase 3. Tool Calling Runtime
+## Phase 3. Tool Calling Runtime — 완료
 
 ### 목표
 
@@ -170,7 +195,7 @@ internal/agent
 
 ---
 
-## Phase 4. Go Graph Runtime
+## Phase 4. Go Graph Runtime — 완료
 
 ### 목표
 
@@ -213,7 +238,7 @@ internal/agent
 
 ---
 
-## Phase 5. Single Agent Runtime
+## Phase 5. Single Agent Runtime — 완료
 
 ### 목표
 
@@ -221,7 +246,7 @@ Tool Calling이 가능한 Single Agent를 구현한다.
 
 ### 구현 범위 (하위 분할)
 
-이 Phase는 이질적인 Tool과 Agent 실행 구조가 섞여 있어 feature-dir와 implement 사이클을 세 갈래로 나눈다.
+이 Phase는 이질적인 Tool과 Agent 실행 구조가 섞여 있어 feature-dir와 implement 사이클을 세 갈래로 나눴다.
 소수점 번호는 5.1 → 5.2 → 5.3 순서의 선행 의존을 뜻한다.
 
 #### Phase 5.1 — Tool 묶음
@@ -270,7 +295,7 @@ internal/graph
 
 ---
 
-## Phase 6. RAG Runtime
+## Phase 6. RAG Runtime — 예정
 
 ### 목표
 
@@ -320,67 +345,7 @@ internal/agent
 
 ---
 
-## Phase 7. Multi-Agent Runtime
-
-### 목표
-
-여러 Agent가 역할을 나누어 협력하는 구조를 구현한다.
-
-### 구현 범위 (하위 분할)
-
-이 Phase는 분량이 크고 패턴이 서로 독립적이라 feature-dir와 implement 사이클을 세 갈래로 나눈다.
-소수점 번호는 정수 Phase 같은 직렬 의존이 아니라, 7.1을 토대로 7.2·7.3이 올라가는 동급 분할을 뜻한다.
-
-#### Phase 7.1 — Worker / Supervisor 기반
-
-* `WorkerAgent` interface (transport-agnostic)
-* `Supervisor`
-* `HandoffCommand`
-* `WorkerAgent` → `Tool` adapter (agent-as-tool 슈퍼바이저용)
-* Supervisor Pattern (handoff형 / agent-as-tool형)
-
-#### Phase 7.2 — 협력 패턴 (7.1 위 동급)
-
-* Network Pattern
-* Hierarchical Pattern
-* Planner-Worker Pattern
-
-#### Phase 7.3 — 구체 Worker & 합성 (7.1 위 동급)
-
-* Research Agent
-* Writer Agent
-* Result aggregation
-
-### 주요 패키지
-
-```text
-internal/multiagent
-internal/orchestrator
-internal/agent
-```
-
-### 학습 포인트
-
-* Multi-Agent는 Agent를 많이 만드는 것이 아니라 책임을 나누는 것이다.
-* Supervisor는 task decomposition과 routing을 담당한다.
-* Handoff는 다음 Agent에게 작업을 넘기는 명시적 구조다. LLM/노드가 다음 목적지(goto)를 런타임에 정하므로,
-  Phase 4 Conditional Router의 특수형으로 볼 수 있다.
-* Supervisor는 두 방식으로 구현된다 — handoff형(다음 Agent로 제어권을 넘김)과 agent-as-tool형(WorkerAgent를
-  Tool로 감싸 호출하고 제어권을 유지). 후자는 `WorkerAgent` → `Tool` adapter로 표현한다.
-* `WorkerAgent`는 처음부터 직렬화 가능한 입력/출력 + context 기반 시그니처로 설계해, 이후 remote(A2A) 워커로
-  교체해도 Orchestrator가 바뀌지 않도록 한다.
-
-### 완료 기준
-
-* Supervisor가 사용자 요청을 task로 분해한다.
-* 적절한 WorkerAgent를 선택한다.
-* WorkerAgent 결과를 수집한다.
-* 최종 응답을 합성한다.
-* Worker interface가 local/remote 어느 쪽으로도 구현될 수 있는 형태다.
-
----
-
-## Phase 8. Memory Runtime
+## Phase 7. Memory Runtime — 예정
 
 ### 목표
 
@@ -422,7 +387,67 @@ internal/agent
 
 ---
 
-## Phase 9. MCP Adapter
+## Phase 8. Multi-Agent Runtime — 예정
+
+### 목표
+
+여러 Agent가 역할을 나누어 협력하는 구조를 구현한다. 이 프로젝트의 핵심 Phase다.
+
+### 구현 범위 (하위 분할)
+
+이 Phase는 분량이 크고 패턴이 서로 독립적이라 feature-dir와 implement 사이클을 세 갈래로 나눈다.
+소수점 번호는 정수 Phase 같은 직렬 의존이 아니라, 8.1을 토대로 8.2·8.3이 올라가는 동급 분할을 뜻한다.
+
+#### Phase 8.1 — Worker / Supervisor 기반
+
+* `WorkerAgent` interface (transport-agnostic)
+* `Supervisor`
+* `HandoffCommand`
+* `WorkerAgent` → `Tool` adapter (agent-as-tool 슈퍼바이저용)
+* Supervisor Pattern (handoff형 / agent-as-tool형)
+
+#### Phase 8.2 — 협력 패턴 (8.1 위 동급)
+
+* Network Pattern
+* Hierarchical Pattern
+* Planner-Worker Pattern
+
+#### Phase 8.3 — 구체 Worker & 합성 (8.1 위 동급)
+
+* Research Agent
+* Writer Agent
+* Result aggregation
+
+### 주요 패키지
+
+```text
+internal/multiagent
+internal/orchestrator
+internal/agent
+```
+
+### 학습 포인트
+
+* Multi-Agent는 Agent를 많이 만드는 것이 아니라 책임을 나누는 것이다.
+* Supervisor는 task decomposition과 routing을 담당한다.
+* Handoff는 다음 Agent에게 작업을 넘기는 명시적 구조다. LLM/노드가 다음 목적지(goto)를 런타임에 정하므로,
+  Phase 4 Conditional Router의 특수형으로 볼 수 있다.
+* Supervisor는 두 방식으로 구현된다 — handoff형(다음 Agent로 제어권을 넘김)과 agent-as-tool형(WorkerAgent를
+  Tool로 감싸 호출하고 제어권을 유지). 후자는 `WorkerAgent` → `Tool` adapter로 표현한다.
+* `WorkerAgent`는 처음부터 직렬화 가능한 입력/출력 + context 기반 시그니처로 설계해, 이후 remote(A2A) 워커로
+  교체해도 Orchestrator가 바뀌지 않도록 한다.
+
+### 완료 기준
+
+* Supervisor가 사용자 요청을 task로 분해한다.
+* 적절한 WorkerAgent를 선택한다.
+* WorkerAgent 결과를 수집한다.
+* 최종 응답을 합성한다.
+* Worker interface가 local/remote 어느 쪽으로도 구현될 수 있는 형태다.
+
+---
+
+## Phase 9. MCP Adapter — 예정
 
 ### 목표
 
@@ -466,7 +491,7 @@ internal/tool
 
 ---
 
-## Phase 10. A2A Adapter
+## Phase 10. A2A Adapter — 예정
 
 ### 목표
 
@@ -482,7 +507,6 @@ A2A를 이용해 Agent 간 상호운용 구조를 구현한다.
 * A2A Client / Server (SDK 기반)
 * remote agent descriptor
 * remote worker agent adapter (자작)
-* orchestrator integration
 * MCP Agent와 A2A Agent 조합
 
 ### 주요 패키지
@@ -490,29 +514,29 @@ A2A를 이용해 Agent 간 상호운용 구조를 구현한다.
 ```text
 internal/protocol/a2a
 internal/multiagent
-internal/orchestrator
 ```
 
 ### 학습 포인트
 
 * MCP는 Tool 호출이고, A2A는 Agent 호출이다.
-* Remote Agent도 Local WorkerAgent처럼 다룰 수 있어야 한다. (Phase 7의 Worker interface 재사용)
-* Orchestrator는 local/remote 여부를 몰라도 된다.
+* Remote Agent도 Local WorkerAgent처럼 다룰 수 있어야 한다. (Phase 8의 Worker interface 재사용)
+* A2A adapter는 Worker interface 뒤에 들어가므로, 호출하는 쪽은 local/remote 여부를 몰라도 된다.
 
 ### 완료 기준
 
 * Agent가 자신의 capability를 Agent Card로 표현한다.
 * A2A Server가 외부 요청을 받아 Agent를 실행한다.
 * A2A Client가 Remote Agent를 호출한다.
-* Orchestrator가 Remote Agent를 Worker로 사용할 수 있다.
+* Remote Agent를 Phase 8의 `WorkerAgent`로 다룰 수 있다.
 
 ---
 
-## Phase 11. Final Orchestrator Runtime
+## Phase 11. Orchestrator Runtime — 예정
 
 ### 목표
 
 Web Search, RAG, File Management를 포함한 범용 Multi-Agent를 하나의 `agent-runtime`으로 통합한다.
+local Worker와 A2A 기반 remote Worker를 동일한 Orchestrator 아래에서 다룬다.
 
 ### 구현 범위 (하위 분할)
 
@@ -581,11 +605,11 @@ User Request
 
 ---
 
-## Phase 12. Runtime Refinement
+## Phase 12. Runtime Refinement — 예정
 
 ### 목표
 
-단계적으로 구현한 코드를 재사용 가능한 Runtime 구조로 정리한다.
+단계적으로 구현한 코드를 재사용 가능한 Runtime 구조로 정리한다. 새 기능이 아니라 수렴·정리 단계다.
 
 ### 구현 범위
 
@@ -615,28 +639,29 @@ User Request
 # 진행 순서 요약
 
 ```text
-00. Project Foundation
-01. LLM Client
-02. Agent State / ReAct
-03. Tool Calling Runtime
-04. Graph Runtime
-05. Single Agent Runtime
+00. Project Foundation                         [x]
+01. LLM Client (Claude / GPT + Ollama)         [x]
+02. Agent State / ReAct                         [x]
+03. Tool Calling Runtime                        [x]
+04. Graph Runtime                               [x]
+05. Single Agent Runtime                        [x]
     05.1 Tool 묶음
     05.2 Agent 실행 구조
-06. RAG Runtime
+    05.3 Streaming Agent Response
+06. RAG Runtime                                 [ ]
     06.1 인덱싱 파이프라인
     06.2 검색·활용
-07. Multi-Agent Runtime
-    07.1 Worker / Supervisor 기반
-    07.2 협력 패턴
-    07.3 구체 Worker & 합성
-08. Memory Runtime
-09. MCP Adapter
-10. A2A Adapter
-11. Final Orchestrator Runtime
+07. Memory Runtime                              [ ]
+08. Multi-Agent Runtime                         [ ]
+    08.1 Worker / Supervisor 기반
+    08.2 협력 패턴
+    08.3 구체 Worker & 합성
+09. MCP Adapter                                 [ ]
+10. A2A Adapter                                 [ ]
+11. Orchestrator Runtime                        [ ]
     11.1 Worker Agent 구성
     11.2 오케스트레이션
-12. Runtime Refinement
+12. Runtime Refinement                          [ ]
 ```
 
 # Phase별 구현 위치 요약
@@ -649,8 +674,8 @@ User Request
 | Phase 4  | `internal/graph`                             |
 | Phase 5  | `internal/agent`, `internal/tool`            |
 | Phase 6  | `internal/rag`                               |
-| Phase 7  | `internal/multiagent`                        |
-| Phase 8  | `internal/memory`                            |
+| Phase 7  | `internal/memory`                            |
+| Phase 8  | `internal/multiagent`                        |
 | Phase 9  | `internal/protocol/mcp`                      |
 | Phase 10 | `internal/protocol/a2a`                      |
 | Phase 11 | `internal/orchestrator`, `cmd/agent-runtime` |
@@ -676,7 +701,6 @@ Kubernetes 배포
 Web UI
 권한 시스템
 멀티 테넌시
-SQL Analyzer Agent
 운영형 Agent Gateway
 ```
 

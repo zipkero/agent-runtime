@@ -4,19 +4,19 @@ Go 기반 AI Agent Runtime 구현 프로젝트입니다.
 
 이 프로젝트는 LangChain, LangGraph를 사용하지 않고 LLM 기반 Agent Runtime을 직접 구현합니다.
 
-## 이 Runtime이 하는 일 (제품 목적)
+## 이 프로젝트가 향하는 곳
 
-이 Runtime 본체는 특정 도메인에 묶이지 않습니다. 도메인 성격은 런타임을 수정하지 않고 **plugin**(도메인
-Tool set + RAG 코퍼스 + 프롬프트 + Worker 구성 묶음)을 끼워 주입하며, 본체는 어떤 plugin이 끼워지든 바뀌지
-않습니다. (고정 코어에 확장을 끼우는 plugin/microkernel 구조입니다.)
+이 프로젝트의 목적은 LLM 기반 Agent를 구성하는 핵심 개념을 Go 기반 Runtime 구조로 흡수하는 것입니다.
+단발성 LLM 호출에서 시작해, ReAct loop와 Tool Calling, Graph 실행 엔진, RAG, Memory를 거쳐, 여러 Agent가
+협력하고 A2A로 서로를 호출하는 **Multi-Agent Runtime**까지 하나의 코드베이스로 성장시킵니다.
 
-첫 번째로 만들 plugin은 **사내 지식·기획** 방향입니다. 사내 지식과 결정 히스토리를 저장하고, 그 위에서
-문의·기획을 돕습니다. 범용 리서치 같은 다른 성격도 같은 런타임 위의 또 다른 plugin으로 둘 수 있습니다.
+도착점은 다음 한 문장으로 요약됩니다 — **여러 Agent가 역할을 나눠 협력하고, 그 Agent들을 local 실행과
+A2A 기반 remote 실행으로 동일하게 다루는 Orchestrator 기반 Multi-Agent System.**
 
 예제 코드를 단계별로 분리해 보관하지 않고, 하나의 Go 코드베이스를 점진적으로 발전시키는 방식으로 진행합니다.
 
-즉 이 프로젝트의 목적은 LLM 기반 Agent를 구성하는 핵심 개념을 Go 기반 Runtime 구조로 흡수해, 하나의
-Agent Runtime으로 성장시키는 것입니다.
+엔진 본체는 특정 도메인에 묶이지 않습니다. system prompt, tool 목록, worker 구성 같은 도메인 성격은
+런타임을 수정하지 않고 진입점에서 주입하며, 본체는 어떤 구성이 주입되든 바뀌지 않습니다.
 
 ## 목표
 
@@ -26,14 +26,14 @@ Agent Runtime으로 성장시키는 것입니다.
 * ReAct 기반 Agent Loop 구현
 * Tool Calling Runtime 구현
 * State / Node / Edge / Conditional Edge 구조를 라이브러리 없이 직접 구현
-* Single Agent 구현
-* Web Search / File / Code / RAG Tool 구현
+* Single Agent 구현 (Web Search / File / Code Tool 포함)
+* RAG Tool 구현
+* Memory Runtime (단기 / 장기) 구현
 * Multi-Agent Runtime 구현
-* Supervisor / Network / Hierarchical Agent Pattern 구현
-* Short-term Memory / Long-term Memory 구현
+* Supervisor / Network / Hierarchical / Handoff Agent Pattern 구현
 * MCP 기반 외부 Tool 연동 구조 구현
 * A2A 기반 Agent 간 상호운용 구조 구현
-* 최종적으로 Web Search, RAG, File Management, Orchestrator를 포함한 Multi-Agent Runtime 구현
+* 최종적으로 local/remote Worker를 함께 다루는 Orchestrator 기반 Multi-Agent Runtime 구현
 
 ## 무엇을 직접 만들고, 무엇을 연결하는가
 
@@ -54,15 +54,15 @@ LangChain / LangGraph가 제공하던 기능은 사용하지 않고 직접 구�
 
 금지 대상은 LangChain / LangGraph 계열뿐입니다. 아래 외부 세계와의 연결은 공식 SDK 또는 HTTP로 처리합니다.
 
-* LLM 호출: 실제 Claude / GPT API (provider별 client는 interface 뒤에 둠, 초기에는 Claude 우선)
+* LLM 호출: 실제 Claude / GPT API + 로컬 모델(Ollama) (provider별 client는 interface 뒤에 둠)
 * 임베딩 생성: 임베딩 API 또는 로컬 모델(Ollama 등)
-* 웹 검색: 검색 API
+* 웹 검색: 검색 API (Tavily)
 * 벡터 저장 / 검색: Postgres + pgvector
 * MCP: 공식 Go SDK + Runtime adapter 자작
 * A2A: 공식 Go SDK + Runtime adapter 자작
 
-핵심은 **두뇌·뼈대(Agent 로직·Graph·Tool·Memory·Orchestration)는 직접 만들고, 바깥 세계로 나가는 배선은
-SDK/HTTP로 연결한다**는 것입니다.
+핵심은 **두뇌·뼈대(Agent 로직·Graph·Tool·Memory·Multi-Agent·Orchestration)는 직접 만들고, 바깥 세계로
+나가는 배선은 SDK/HTTP로 연결한다**는 것입니다.
 
 ## 진행 방식
 
@@ -82,11 +82,11 @@ Agent 실행 계층
 RAG
 → internal/rag
 
-Multi-Agent
-→ internal/multiagent, internal/orchestrator
-
 Memory
 → internal/memory
+
+Multi-Agent
+→ internal/multiagent, internal/orchestrator
 
 Protocol 확장
 → internal/protocol/mcp, internal/protocol/a2a
@@ -135,8 +135,8 @@ Runtime 실행 진입점입니다.
 
 LLM Provider 추상화 계층입니다.
 
-실제 Claude / GPT API를 호출하되, Provider를 교체 가능하게 만드는 것이 목표입니다. 초기에는 한 Provider로
-시작하고 interface 뒤에서 다른 Provider를 추가합니다.
+실제 Claude / GPT API를 호출하되, Provider를 교체 가능하게 만드는 것이 목표입니다. 로컬 모델(Ollama)도
+같은 interface 뒤에서 다룹니다.
 
 주요 책임:
 
@@ -144,6 +144,7 @@ LLM Provider 추상화 계층입니다.
 * Message 구조 정의
 * Tool call response 처리
 * Structured output 처리
+* Streaming response 처리
 * Provider별 client 구현 (실제 API 호출)
 * 테스트용 stub client (실행 경로는 실제 API, 테스트만 stub 교체)
 
@@ -171,6 +172,9 @@ Single Agent 실행 구조를 담당합니다.
 * Final answer detection
 * Agent state transition
 * Tool call decision 처리
+* Middleware hook (pre / post model)
+* Structured output
+* Streaming runner
 
 ### `internal/graph`
 
@@ -199,6 +203,7 @@ Tool Calling Runtime을 담당합니다.
 * Tool execution
 * Tool timeout
 * Tool result normalization
+* 기본 Tool (calculator / file read / file save / web search / code execution)
 
 ### `internal/rag`
 
@@ -318,8 +323,8 @@ Runtime
 
 ### 엔진은 도메인에 묶이지 않는다
 
-`internal/*` 엔진 코드에는 특정 도메인(리서치·사내 지식 등)의 어휘나 가정이 들어가지 않습니다. 도메인 성격은
-프롬프트·코퍼스·Tool·Worker 구성, 즉 plugin으로만 표현합니다.
+`internal/*` 엔진 코드에는 특정 도메인의 어휘나 가정이 들어가지 않습니다. 도메인 성격은 프롬프트·코퍼스·Tool·
+Worker 구성으로만 표현합니다.
 
 ### 도메인 구성은 주입받는다
 
@@ -399,12 +404,13 @@ Agent는 실행 과정이 중요합니다.
 * MCP Adapter
 * A2A Adapter
 * Orchestrator
-* CLI 또는 Server Entry Point
+* CLI Entry Point
 
 ## 제외 범위
 
-초기 진행 중에는 다음을 핵심 목표로 삼지 않습니다.
+이 프로젝트는 Agent Runtime을 직접 만드는 데 집중합니다. 다음은 범위에서 제외합니다.
 
+* LangChain / LangGraph 계열 라이브러리 (직접 구현으로 대체)
 * Web UI
 * SaaS 멀티 테넌시
 * Kubernetes 배포
@@ -412,6 +418,5 @@ Agent는 실행 과정이 중요합니다.
 * 복잡한 권한 시스템
 * Agent Marketplace
 * 완전한 Framework 제품화
-* 사내 지식·기획 외의 추가 도메인 plugin (예: coding plugin) — 첫 plugin 이후 확장
 
-이 항목들은 Runtime 완성 후 확장 과제로 다룹니다.
+이 항목들은 Runtime 완성 후 확장 과제로 다룰 수 있습니다.
