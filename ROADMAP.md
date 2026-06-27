@@ -7,14 +7,15 @@
 대신 하나의 Go Agent Runtime 코드베이스를 계속 개선하며, 각 단계의 개념을 Runtime 기능으로 흡수합니다.
 
 도착점은 **여러 Agent가 역할을 나눠 협력하고, 그 Agent들을 local 실행과 A2A 기반 remote 실행으로 동일하게
-다루는 Orchestrator 기반 Multi-Agent System**입니다. 앞 단계(LLM·ReAct·Tool·Graph·RAG·Memory)는 이
+다루는 Orchestrator 기반 Multi-Agent System**입니다. 앞 단계(LLM·Agent loop·Tool·RAG·Memory)는 이
 도착점을 떠받치는 구성 요소입니다.
 
 ## 진행 원칙
 
 ```text
 구현 의존성 순서로 단계적으로 발전시킨다.
-LangChain / LangGraph는 사용하지 않는다. (그 외 SDK는 사용한다)
+제어 흐름·상태·협력은 일반 Go 코드(for / switch / 함수 / struct)로 직접 구현한다.
+Runtime 본체는 직접 만들고, 외부 연결(LLM·임베딩·웹 검색·벡터 저장·MCP·A2A)은 공식 SDK 또는 HTTP로 처리한다.
 단계별 예제 폴더는 만들지 않는다.
 하나의 Runtime을 계속 발전시킨다.
 진행 상태는 docs, commit, tag로 추적한다.
@@ -23,24 +24,23 @@ LangChain / LangGraph는 사용하지 않는다. (그 외 SDK는 사용한다)
 ## 진행 현황
 
 ```text
-[x] Phase 0  Project Foundation
-[x] Phase 1  LLM Client          (Claude / GPT + Ollama 로컬 provider)
-[x] Phase 2  Agent State / ReAct
-[x] Phase 3  Tool Calling Runtime
-[x] Phase 4  Graph Runtime
-[x] Phase 5  Single Agent Runtime (5.1 Tool 묶음 / 5.2 실행 구조 / 5.3 Streaming)
-[ ] Phase 6  RAG Runtime
-[ ] Phase 7  Memory Runtime
-[ ] Phase 8  Multi-Agent Runtime
-[ ] Phase 9  MCP Adapter
-[ ] Phase 10 A2A Adapter
-[ ] Phase 11 Orchestrator Runtime
-[ ] Phase 12 Runtime Refinement
+[ ] Phase 0  Project Foundation
+[ ] Phase 1  LLM Client          (Claude + Ollama 로컬 provider)
+[ ] Phase 2  Agent Loop
+[ ] Phase 3  Tool Calling Runtime
+[ ] Phase 4  Single Agent Runtime (4.1 Tool 묶음 / 4.2 실행 구조 / 4.3 Streaming)
+[ ] Phase 5  RAG Runtime          (5.1 인덱싱 / 5.2 검색·활용)
+[ ] Phase 6  Memory Runtime       (6.1 단기 메모리 / 6.2 장기 메모리 & Tool)
+[ ] Phase 7  Multi-Agent Runtime  (7.1 Worker·Routing / 7.2 Orchestrator-Workers / 7.3 구체 Worker)
+[ ] Phase 8  MCP Adapter
+[ ] Phase 9  A2A Adapter
+[ ] Phase 10 Orchestrator Runtime (10.1 Worker 구성 / 10.2 오케스트레이션)
+[ ] Phase 11 Runtime Refinement
 ```
 
 ---
 
-## Phase 0. Project Foundation — 완료
+## Phase 0. Project Foundation — 예정
 
 ### 목표
 
@@ -72,7 +72,7 @@ internal/config
 
 ---
 
-## Phase 1. LLM 기반 의사결정 구조 — 완료
+## Phase 1. LLM 기반 의사결정 구조 — 예정
 
 ### 목표
 
@@ -86,8 +86,9 @@ LLM을 Agent Runtime의 판단 주체로 사용하기 위한 기본 추상화를
 * `Message`
 * `ToolCall`
 * `ToolResult`
-* 실제 Claude / GPT API를 호출하는 client
+* 실제 Claude API를 호출하는 client
 * 로컬 모델 provider (Ollama, tool calling 포함)
+* GPT 등 다른 provider는 같은 `LLMClient` interface로 추가 (예정)
 * 테스트용 stub client
 * model / api key config
 * context timeout 처리
@@ -110,12 +111,12 @@ internal/config
 ### 완료 기준
 
 * CLI에서 사용자 입력을 받아 실제 LLM 응답을 받을 수 있다.
-* LLM Provider 교체 가능성을 interface로 표현한다. (Claude / GPT / Ollama)
+* LLM Provider 교체 가능성을 interface로 표현한다. (Claude / Ollama 구현, GPT 등은 같은 interface로 추가)
 * request timeout이 동작한다.
 
 ---
 
-## Phase 2. Agent State와 ReAct 기초 — 완료
+## Phase 2. Agent Loop — 예정
 
 ### 목표
 
@@ -123,12 +124,11 @@ Agent가 단발성 LLM 호출이 아니라, 상태를 유지하며 반복적으�
 
 ### 구현 범위
 
-* `AgentState`
+* `AgentState` (평범한 struct: 메시지 / step / status)
 * `Agent`
-* ReAct loop
+* agent loop (LLM 호출 → 응답 해석 → 반복)
 * step counter
 * final answer detection
-* reflection hook
 * max steps
 * error state
 
@@ -144,17 +144,18 @@ internal/message
 * Agent는 LLM 호출 한 번으로 끝나지 않는다.
 * LLM 응답을 보고 다음 행동을 Runtime이 해석해야 한다.
 * 무한 루프 방지를 위한 max step이 필요하다.
+* 이 반복 판단 구조는 평범한 Go `for` 루프로 충분히 표현된다.
 
 ### 완료 기준
 
 * 사용자 입력이 `AgentState`에 저장된다.
 * LLM 응답이 state에 누적된다.
-* step 기반 실행이 가능하다.
+* step 기반 반복 실행이 가능하다.
 * max step 초과 시 안전하게 종료된다.
 
 ---
 
-## Phase 3. Tool Calling Runtime — 완료
+## Phase 3. Tool Calling Runtime — 예정
 
 ### 목표
 
@@ -185,6 +186,7 @@ internal/agent
 * LLM은 Tool을 직접 실행하지 않는다.
 * LLM은 Tool Call을 요청하고, Runtime이 실행한다.
 * Tool schema가 명확해야 안정적인 Tool Calling이 가능하다.
+* Tool 실행 결과를 state에 누적해 다음 루프 입력으로 넘기면, Phase 2의 agent loop가 비로소 여러 step을 돈다.
 
 ### 완료 기준
 
@@ -195,50 +197,7 @@ internal/agent
 
 ---
 
-## Phase 4. Go Graph Runtime — 완료
-
-### 목표
-
-State / Node / Edge / Conditional Edge 개념을 Go로 직접 구현한다.
-
-### 구현 범위
-
-* `GraphState`
-* `Node` interface
-* `Edge`
-* `Router`
-* `ConditionalRouter`
-* `Reducer`
-* `Graph`
-* graph execution loop
-* graph max steps
-* node error handling
-
-### 주요 패키지
-
-```text
-internal/graph
-internal/agent
-```
-
-### 학습 포인트
-
-* Graph의 핵심은 State, Node, Edge, Conditional Edge다.
-* Agent 실행 흐름은 Graph로 표현할 수 있다.
-* Tool Calling Agent는 `llm_node → tool_node → llm_node → end` 구조로 표현 가능하다.
-* 정적 Edge만 연결하면 단계를 미리 지정한 workflow가 되고, Conditional Router + ReAct loop를 쓰면 동적
-  자율 에이전트가 된다. 같은 Graph 엔진으로 두 구조를 모두 표현한다.
-
-### 완료 기준
-
-* State가 Node를 거치며 변경된다.
-* 조건에 따라 다음 Node가 달라진다.
-* Tool Call이 있으면 Tool Node로 이동한다.
-* Tool Call이 없으면 종료된다.
-
----
-
-## Phase 5. Single Agent Runtime — 완료
+## Phase 4. Single Agent Runtime — 예정
 
 ### 목표
 
@@ -247,22 +206,22 @@ Tool Calling이 가능한 Single Agent를 구현한다.
 ### 구현 범위 (하위 분할)
 
 이 Phase는 이질적인 Tool과 Agent 실행 구조가 섞여 있어 feature-dir와 implement 사이클을 세 갈래로 나눴다.
-소수점 번호는 5.1 → 5.2 → 5.3 순서의 선행 의존을 뜻한다.
+소수점 번호는 4.1 → 4.2 → 4.3 순서의 선행 의존을 뜻한다.
 
-#### Phase 5.1 — Tool 묶음
+#### Phase 4.1 — Tool 묶음
 
 * Web Search Tool (Tavily 검색 API 연동)
 * File Save Tool
 * Code Execution Tool
 
-#### Phase 5.2 — Agent 실행 구조 (5.1 이후)
+#### Phase 4.2 — Agent 실행 구조 (4.1 이후)
 
 * Middleware hook (pre / post model)
 * Structured Output
 * Single Agent runner
-* Graph 기반 Single Agent 실행
+* agent loop 기반 Single Agent 실행
 
-#### Phase 5.3 — Streaming Agent Response (5.2 이후)
+#### Phase 4.3 — Streaming Agent Response (4.2 이후)
 
 * Provider-neutral streaming LLM contract
 * Runner streaming event
@@ -275,7 +234,6 @@ Tool Calling이 가능한 Single Agent를 구현한다.
 ```text
 internal/agent
 internal/tool
-internal/graph
 ```
 
 ### 학습 포인트
@@ -295,7 +253,7 @@ internal/graph
 
 ---
 
-## Phase 6. RAG Runtime — 예정
+## Phase 5. RAG Runtime — 예정
 
 ### 목표
 
@@ -304,16 +262,16 @@ internal/graph
 ### 구현 범위 (하위 분할)
 
 이 Phase는 인덱싱 파이프라인과 검색·활용이 선형 의존이라 feature-dir와 implement 사이클을 두 갈래로 나눈다.
-소수점 번호는 6.1 → 6.2 순서로 진행하는 선행 의존을 뜻한다.
+소수점 번호는 5.1 → 5.2 순서로 진행하는 선행 의존을 뜻한다.
 
-#### Phase 6.1 — 인덱싱 파이프라인
+#### Phase 5.1 — 인덱싱 파이프라인
 
 * document loader
 * chunker
 * embedding client (외부 임베딩 API 또는 로컬 모델 호출, interface로 추상화)
 * vector store (Postgres + pgvector)
 
-#### Phase 6.2 — 검색·활용 (6.1 이후)
+#### Phase 5.2 — 검색·활용 (5.1 이후)
 
 * retriever
 * retrieval tool
@@ -345,19 +303,27 @@ internal/agent
 
 ---
 
-## Phase 7. Memory Runtime — 예정
+## Phase 6. Memory Runtime — 예정
 
 ### 목표
 
 Agent가 단기/장기 메모리를 사용할 수 있도록 구현한다.
 
-### 구현 범위
+### 구현 범위 (하위 분할)
+
+이 Phase는 인메모리 영역과 영속 영역이 선형 의존이라 feature-dir와 implement 사이클을 두 갈래로 나눈다.
+소수점 번호는 6.1 → 6.2 순서로 진행하는 선행 의존을 뜻한다. 6.2는 Phase 5에서 갖춘 Postgres 인프라를 재사용한다.
+
+#### Phase 6.1 — 단기 메모리 (Postgres 불필요)
 
 * `MemoryStore` interface
 * short-term memory
 * session memory
 * message trimming
 * summary memory
+
+#### Phase 6.2 — 장기 메모리 & Tool (6.1 이후, Postgres 재사용)
+
 * long-term memory (Postgres backend)
 * user memory read tool
 * user memory write tool
@@ -387,32 +353,39 @@ internal/agent
 
 ---
 
-## Phase 8. Multi-Agent Runtime — 예정
+## Phase 7. Multi-Agent Runtime — 예정
 
 ### 목표
 
 여러 Agent가 역할을 나누어 협력하는 구조를 구현한다. 이 프로젝트의 핵심 Phase다.
 
+이 Phase는 Phase 6(Memory)에 의존하지 않는다. Phase 4(Single Agent) 위에서 성립하며, Memory 뒤에 둔 것은
+직렬 의존이 아니라 난이도·독립성에 따른 권장 순서다. Memory보다 먼저 진행해도 무방하다.
+
 ### 구현 범위 (하위 분할)
 
 이 Phase는 분량이 크고 패턴이 서로 독립적이라 feature-dir와 implement 사이클을 세 갈래로 나눈다.
-소수점 번호는 정수 Phase 같은 직렬 의존이 아니라, 8.1을 토대로 8.2·8.3이 올라가는 동급 분할을 뜻한다.
+소수점 번호는 정수 Phase 같은 직렬 의존이 아니라, 7.1을 토대로 7.2·7.3이 올라가는 동급 분할을 뜻한다.
 
-#### Phase 8.1 — Worker / Supervisor 기반
+#### Phase 7.1 — Worker 인터페이스 & Routing
 
 * `WorkerAgent` interface (transport-agnostic)
-* `Supervisor`
-* `HandoffCommand`
-* `WorkerAgent` → `Tool` adapter (agent-as-tool 슈퍼바이저용)
-* Supervisor Pattern (handoff형 / agent-as-tool형)
+* Routing (요청을 분류해 적절한 worker로 디스패치)
+* `WorkerAgent` → `Tool` adapter (worker를 Tool로 감싸 호출)
 
-#### Phase 8.2 — 협력 패턴 (8.1 위 동급)
+#### Phase 7.2 — Orchestrator-Workers (7.1 위 동급)
 
-* Network Pattern
-* Hierarchical Pattern
-* Planner-Worker Pattern
+* 작업 분해 (task decomposition)
+* worker 호출·제어
+* 결과 합성 (result aggregation)
+* Planner-Worker flow
 
-#### Phase 8.3 — 구체 Worker & 합성 (8.1 위 동급)
+#### Phase 7.3 — 구체 Worker & 합성 (7.1 위 동급)
+
+여기 Worker는 7.1·7.2 패턴을 실증하기 위한 최소 구현이다. 7.1에서 정의한 `WorkerAgent` 시그니처를 그대로
+따르고, Phase 10.1의 production Worker(Web Search / RAG / File Management / Writer)는 같은 인터페이스 뒤에서
+prompt·tool 구성만 교체·확장한다. 즉 7.3 → 10.1은 인터페이스를 유지한 채 구현 내용을 채워 넣는 관계이며,
+같은 Agent를 처음부터 두 번 만드는 것이 아니다.
 
 * Research Agent
 * Writer Agent
@@ -429,25 +402,24 @@ internal/agent
 ### 학습 포인트
 
 * Multi-Agent는 Agent를 많이 만드는 것이 아니라 책임을 나누는 것이다.
-* Supervisor는 task decomposition과 routing을 담당한다.
-* Handoff는 다음 Agent에게 작업을 넘기는 명시적 구조다. LLM/노드가 다음 목적지(goto)를 런타임에 정하므로,
-  Phase 4 Conditional Router의 특수형으로 볼 수 있다.
-* Supervisor는 두 방식으로 구현된다 — handoff형(다음 Agent로 제어권을 넘김)과 agent-as-tool형(WorkerAgent를
-  Tool로 감싸 호출하고 제어권을 유지). 후자는 `WorkerAgent` → `Tool` adapter로 표현한다.
+* Routing은 요청을 분류해 알맞은 worker에게 보내는 구조다. 다음 목적지를 런타임에 정한다는 점에서, Phase 2
+  agent loop의 분기 판단을 worker 선택으로 확장한 것이다.
+* Orchestrator-workers는 한 에이전트가 작업을 분해해 여러 worker를 호출하고 결과를 합성하는 구조다.
+* worker를 Tool로 감싸면(worker-as-tool) orchestrator가 제어권을 유지한 채 worker를 호출할 수 있다.
 * `WorkerAgent`는 처음부터 직렬화 가능한 입력/출력 + context 기반 시그니처로 설계해, 이후 remote(A2A) 워커로
   교체해도 Orchestrator가 바뀌지 않도록 한다.
 
 ### 완료 기준
 
-* Supervisor가 사용자 요청을 task로 분해한다.
-* 적절한 WorkerAgent를 선택한다.
+* Orchestrator가 사용자 요청을 task로 분해한다.
+* 적절한 WorkerAgent를 선택(routing)한다.
 * WorkerAgent 결과를 수집한다.
 * 최종 응답을 합성한다.
 * Worker interface가 local/remote 어느 쪽으로도 구현될 수 있는 형태다.
 
 ---
 
-## Phase 9. MCP Adapter — 예정
+## Phase 8. MCP Adapter — 예정
 
 ### 목표
 
@@ -491,7 +463,7 @@ internal/tool
 
 ---
 
-## Phase 10. A2A Adapter — 예정
+## Phase 9. A2A Adapter — 예정
 
 ### 목표
 
@@ -519,7 +491,7 @@ internal/multiagent
 ### 학습 포인트
 
 * MCP는 Tool 호출이고, A2A는 Agent 호출이다.
-* Remote Agent도 Local WorkerAgent처럼 다룰 수 있어야 한다. (Phase 8의 Worker interface 재사용)
+* Remote Agent도 Local WorkerAgent처럼 다룰 수 있어야 한다. (Phase 7의 Worker interface 재사용)
 * A2A adapter는 Worker interface 뒤에 들어가므로, 호출하는 쪽은 local/remote 여부를 몰라도 된다.
 
 ### 완료 기준
@@ -527,11 +499,11 @@ internal/multiagent
 * Agent가 자신의 capability를 Agent Card로 표현한다.
 * A2A Server가 외부 요청을 받아 Agent를 실행한다.
 * A2A Client가 Remote Agent를 호출한다.
-* Remote Agent를 Phase 8의 `WorkerAgent`로 다룰 수 있다.
+* Remote Agent를 Phase 7의 `WorkerAgent`로 다룰 수 있다.
 
 ---
 
-## Phase 11. Orchestrator Runtime — 예정
+## Phase 10. Orchestrator Runtime — 예정
 
 ### 목표
 
@@ -541,24 +513,26 @@ local Worker와 A2A 기반 remote Worker를 동일한 Orchestrator 아래에서 
 ### 구현 범위 (하위 분할)
 
 이 Phase는 Worker 구성과 오케스트레이션이 선형 의존이라 feature-dir와 implement 사이클을 두 갈래로 나눈다.
-소수점 번호는 11.1로 Worker들을 갖춘 뒤 11.2가 이를 묶는 선행 의존을 뜻한다. 대부분 앞 Phase 재사용·조립이다.
+소수점 번호는 10.1로 Worker들을 갖춘 뒤 10.2가 이를 묶는 선행 의존을 뜻한다. 대부분 앞 Phase 재사용·조립이다.
 
-#### Phase 11.1 — Worker Agent 구성
+#### Phase 10.1 — Worker Agent 구성
 
 * Web Search Agent (Tavily 검색 API)
-* Internal RAG Agent (Postgres + pgvector, Phase 6 재사용)
+* Internal RAG Agent (Postgres + pgvector, Phase 5 재사용)
 * File Management Agent (로컬 파일시스템 기반; Google Drive 등 외부 스토리지는 이후 어댑터로 확장)
 * Writer Agent
 * optional Reviewer Agent
 
-#### Phase 11.2 — 오케스트레이션 (11.1 이후)
+#### Phase 10.2 — 오케스트레이션 (10.1 이후)
 
 * Orchestrator Agent
 * intent analysis
 * plan generation
 * A2A 기반 remote worker 호출
 * local worker fallback
+* remote worker 호출 실패 처리 (timeout / 재시도 / 부분 실패 집계)
 * result aggregation
+* 다중 worker 응답의 streaming 통합 여부 결정 (Phase 4.3 streaming 계약 재사용 또는 final-only 집계)
 * final response generation
 
 ### 주요 패키지
@@ -605,7 +579,7 @@ User Request
 
 ---
 
-## Phase 12. Runtime Refinement — 예정
+## Phase 11. Runtime Refinement — 예정
 
 ### 목표
 
@@ -639,68 +613,70 @@ User Request
 # 진행 순서 요약
 
 ```text
-00. Project Foundation                         [x]
-01. LLM Client (Claude / GPT + Ollama)         [x]
-02. Agent State / ReAct                         [x]
-03. Tool Calling Runtime                        [x]
-04. Graph Runtime                               [x]
-05. Single Agent Runtime                        [x]
-    05.1 Tool 묶음
-    05.2 Agent 실행 구조
-    05.3 Streaming Agent Response
-06. RAG Runtime                                 [ ]
-    06.1 인덱싱 파이프라인
-    06.2 검색·활용
-07. Memory Runtime                              [ ]
-08. Multi-Agent Runtime                         [ ]
-    08.1 Worker / Supervisor 기반
-    08.2 협력 패턴
-    08.3 구체 Worker & 합성
-09. MCP Adapter                                 [ ]
-10. A2A Adapter                                 [ ]
-11. Orchestrator Runtime                        [ ]
-    11.1 Worker Agent 구성
-    11.2 오케스트레이션
-12. Runtime Refinement                          [ ]
+00. Project Foundation                         [ ]
+01. LLM Client (Claude + Ollama)               [ ]
+02. Agent Loop                                  [ ]
+03. Tool Calling Runtime                        [ ]
+04. Single Agent Runtime                        [ ]
+    04.1 Tool 묶음
+    04.2 Agent 실행 구조
+    04.3 Streaming Agent Response
+05. RAG Runtime                                 [ ]
+    05.1 인덱싱 파이프라인
+    05.2 검색·활용
+06. Memory Runtime                              [ ]
+    06.1 단기 메모리
+    06.2 장기 메모리 & Tool
+07. Multi-Agent Runtime                         [ ]
+    07.1 Worker 인터페이스 & Routing
+    07.2 Orchestrator-Workers
+    07.3 구체 Worker & 합성
+08. MCP Adapter                                 [ ]
+09. A2A Adapter                                 [ ]
+10. Orchestrator Runtime                        [ ]
+    10.1 Worker Agent 구성
+    10.2 오케스트레이션
+11. Runtime Refinement                          [ ]
 ```
 
 # Phase별 구현 위치 요약
 
-| Phase    | 구현 위치                                        |
+아래 표는 각 Phase의 대표 위치만 적는다. 실제로 손대는 패키지는 각 Phase 본문의 「주요 패키지」를 따른다.
+
+| Phase    | 구현 위치 (대표)                                 |
 | -------- | -------------------------------------------- |
 | Phase 1  | `internal/llm`, `internal/message`           |
 | Phase 2  | `internal/agent`                             |
 | Phase 3  | `internal/tool`                              |
-| Phase 4  | `internal/graph`                             |
-| Phase 5  | `internal/agent`, `internal/tool`            |
-| Phase 6  | `internal/rag`                               |
-| Phase 7  | `internal/memory`                            |
-| Phase 8  | `internal/multiagent`                        |
-| Phase 9  | `internal/protocol/mcp`                      |
-| Phase 10 | `internal/protocol/a2a`                      |
-| Phase 11 | `internal/orchestrator`, `cmd/agent-runtime` |
+| Phase 4  | `internal/agent`, `internal/tool`            |
+| Phase 5  | `internal/rag`                               |
+| Phase 6  | `internal/memory`                            |
+| Phase 7  | `internal/multiagent`                        |
+| Phase 8  | `internal/protocol/mcp`                      |
+| Phase 9  | `internal/protocol/a2a`                      |
+| Phase 10 | `internal/orchestrator`, `cmd/agent-runtime` |
 
 # 중단 기준
 
 각 Phase는 다음 조건을 만족하기 전까지 다음 Phase로 넘어가지 않는다.
 
-* 실행 가능한 Runtime 상태가 있고, CLI에서 실제로 한 번 돌려 trace로 실행 흐름을 확인했다.
+* 실행 가능한 Runtime 상태가 있고, CLI에서 실제로 한 번 돌려 그 Phase까지 도입된 trace 범위로 실행 흐름을 확인했다.
 * 해당 단계 개념이 코드에 반영되어 있다.
 * README 또는 ROADMAP에 현재 상태가 반영되어 있다.
 * 최소 하나 이상의 실패 케이스가 정리되어 있다.
 
 # 확장 과제
 
-다음 항목은 Runtime 완성 후 진행한다.
+다음 항목은 Runtime 완성 후 진행한다. 목록은 `README.md`의 「제외 범위」와 동일하다.
 
 ```text
-Agent Harness
-OpenTelemetry
-Datadog 연동
-Kubernetes 배포
 Web UI
-권한 시스템
-멀티 테넌시
+SaaS 멀티 테넌시
+Kubernetes 배포
+OpenTelemetry / Datadog 연동
+복잡한 권한 시스템
+Agent Harness
+HTTP API / Agent Server 진입점
 운영형 Agent Gateway
 ```
 
@@ -710,12 +686,11 @@ Web UI
 
 ```text
 LLM 기반 Agent 의사결정 구조
-ReAct Agent Loop
+Agent Loop (tool-use 반복)
 Tool Calling Runtime
-Graph State / Node / Edge / Conditional Edge
 Single Agent Runtime
 RAG Agent
-Multi-Agent Runtime
+Multi-Agent Runtime (Routing / Orchestrator-Workers)
 Memory Runtime
 MCP Tool Adapter
 A2A Agent Adapter
