@@ -96,31 +96,30 @@ Final 통합
 
 ## 프로젝트 구조
 
-아래는 최종 목표 구조입니다. `(예정)` 표시는 해당 Phase에서 생기는 디렉터리·파일로, 현재는 존재하지 않습니다.
-지금은 `README.md`, `ROADMAP.md`와 `.env.example`, `.gitignore`만 있으며, 나머지는 Phase 0부터 차례로
-만들어집니다.
+아래는 목표 구조입니다. Phase 0 기준으로 `go.mod`, `cmd/agent-runtime`, `internal/config`, `.env.example`,
+`.gitignore`, `README.md`, `ROADMAP.md`가 존재하며, 나머지 Runtime 패키지는 이후 Phase에서 차례로 만들어집니다.
 
 ```text
 agent-runtime/
-├── cmd/                     (예정)
+├── cmd/
 │   └── agent-runtime/
 │       └── main.go
-├── internal/                (예정)
+├── internal/
 │   ├── config/
-│   ├── llm/
-│   ├── message/
-│   ├── agent/
-│   ├── tool/
-│   ├── rag/
-│   ├── memory/
-│   ├── multiagent/
-│   ├── orchestrator/
-│   └── protocol/
+│   ├── llm/                 (예정)
+│   ├── message/             (예정)
+│   ├── agent/               (예정)
+│   ├── tool/                (예정)
+│   ├── rag/                 (예정)
+│   ├── memory/              (예정)
+│   ├── multiagent/          (예정)
+│   ├── orchestrator/        (예정)
+│   └── protocol/            (예정)
 │       ├── mcp/
 │       └── a2a/
 ├── .env.example
 ├── .gitignore
-├── go.mod                   (예정)
+├── go.mod
 ├── ROADMAP.md
 └── README.md
 ```
@@ -157,6 +156,7 @@ logger는 별도 패키지를 두지 않고, 이 진입점에서 `internal/confi
 | `LLM_API_KEY`                      | claude provider 호출 키        | Phase 1        |
 | `LLM_TIMEOUT`                      | LLM 호출 timeout               | Phase 1        |
 | `TAVILY_API_KEY`                   | 웹 검색 Tool                   | Phase 4.1      |
+| `LOG_LEVEL`                        | CLI 기본 로그 레벨              | Phase 0        |
 | Postgres DSN (Phase 5.1에서 추가)    | pgvector / 장기 메모리          | Phase 5.1      |
 
 ### `internal/llm`

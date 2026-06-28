@@ -23,7 +23,7 @@ Runtime 본체는 직접 만들고, 외부 연결(LLM·임베딩·웹 검색·�
 ## 진행 현황
 
 ```text
-[ ] Phase 0  Project Foundation
+[x] Phase 0  Project Foundation
 [ ] Phase 1  LLM Client          (Claude + Ollama 로컬 provider)
 [ ] Phase 2  Agent Loop
 [ ] Phase 3  Tool Calling Runtime
@@ -39,7 +39,7 @@ Runtime 본체는 직접 만들고, 외부 연결(LLM·임베딩·웹 검색·�
 
 ---
 
-## Phase 0. Project Foundation — 예정
+## Phase 0. Project Foundation — 완료
 
 ### 목표
 
