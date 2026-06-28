@@ -97,7 +97,8 @@ Final 통합
 ## 프로젝트 구조
 
 아래는 최종 목표 구조입니다. `(예정)` 표시는 해당 Phase에서 생기는 디렉터리·파일로, 현재는 존재하지 않습니다.
-지금은 `README.md`와 `ROADMAP.md` 두 문서만 있으며, 나머지는 Phase 0부터 차례로 만들어집니다.
+지금은 `README.md`, `ROADMAP.md`와 `.env.example`, `.gitignore`만 있으며, 나머지는 Phase 0부터 차례로
+만들어집니다.
 
 ```text
 agent-runtime/
@@ -118,6 +119,7 @@ agent-runtime/
 │       ├── mcp/
 │       └── a2a/
 ├── .env.example
+├── .gitignore
 ├── go.mod                   (예정)
 ├── ROADMAP.md
 └── README.md
@@ -132,6 +134,9 @@ Runtime 실행 진입점입니다.
 초기에는 CLI 중심으로 시작합니다. HTTP API 또는 Agent Server 형태로의 확장은 본 로드맵 범위 밖의 확장
 과제로 다룹니다.
 
+logger는 별도 패키지를 두지 않고, 이 진입점에서 `internal/config`가 제공하는 로그 설정(레벨 등)으로
+초기화합니다.
+
 ### `internal/config`
 
 환경변수와 실행 설정 로딩 계층입니다.
@@ -142,6 +147,7 @@ Runtime 실행 진입점입니다.
 * LLM provider / model / API key 설정
 * 실행 timeout 등 제한 기본값
 * 외부 연동(Tavily, Postgres 등) 설정 값 제공
+* logger 설정 값(로그 레벨 등) 제공
 
 ### `internal/llm`
 
@@ -235,6 +241,9 @@ Agent Memory Runtime을 담당합니다.
 
 여러 Agent가 협력하는 구조를 담당합니다.
 
+이 패키지는 협력의 *패턴과 기본 구성요소*(Worker interface, routing, orchestrator-workers 패턴)를 제공합니다.
+이를 최종 시스템으로 조립하는 상위 계층은 `internal/orchestrator`입니다.
+
 주요 책임:
 
 * Worker agent (transport-agnostic interface)
@@ -246,6 +255,9 @@ Agent Memory Runtime을 담당합니다.
 ### `internal/orchestrator`
 
 최종 Multi-Agent Runtime의 오케스트레이션 계층입니다.
+
+`internal/multiagent`가 제공하는 패턴을 사용해 최종 시스템을 조립합니다. 협력 패턴 자체를 새로 정의하지 않고,
+intent 분석 → plan 생성 → worker 호출 → 응답 합성의 실제 실행 흐름을 책임집니다.
 
 주요 책임:
 
@@ -382,9 +394,10 @@ Agent는 실행 과정이 중요합니다.
 * model
 * token usage
 
-이 필드들은 한 번에 갖춰지지 않고, 각 Phase가 자신이 도입한 정보를 더하며 자랍니다. step은 Phase 2, tool call /
-tool result는 Phase 3, agent는 Phase 7에서 더해지고, latency / model / token usage는 LLM·Runner 계층에서
-채워지며, Phase 11에서 trace 구조를 하나로 정리합니다. 각 Phase의 실제 진행 상태는 `ROADMAP.md`가 소유합니다.
+이 필드들은 한 번에 갖춰지지 않고, 각 Phase가 자신이 도입한 정보를 더하며 자랍니다. step과 action은 Phase 2,
+tool call / tool result는 Phase 3, agent는 Phase 7에서 더해집니다. error는 Phase 2의 error state에서 시작해
+Phase 3의 tool error handling으로 확장되고, latency / model / token usage는 LLM·Runner 계층에서 채워지며,
+Phase 11에서 trace 구조를 하나로 정리합니다. 각 Phase의 실제 진행 상태는 `ROADMAP.md`가 소유합니다.
 
 ## 최종 산출물
 

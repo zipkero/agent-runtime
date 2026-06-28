@@ -34,7 +34,7 @@ Runtime 본체는 직접 만들고, 외부 연결(LLM·임베딩·웹 검색·�
 [ ] Phase 7  Multi-Agent Runtime  (7.1 Worker·Routing / 7.2 Orchestrator-Workers / 7.3 구체 Worker)
 [ ] Phase 8  MCP Adapter
 [ ] Phase 9  A2A Adapter
-[ ] Phase 10 Orchestrator Runtime (10.1 Worker 구성 / 10.2 오케스트레이션)
+[ ] Phase 10 Orchestrator Runtime (10.1 Worker 구성 / 10.2 오케스트레이션 / 10.3 견고성·응답 통합)
 [ ] Phase 11 Runtime Refinement
 ```
 
@@ -131,6 +131,7 @@ Agent가 단발성 LLM 호출이 아니라, 상태를 유지하며 반복적으�
 * final answer detection
 * max steps
 * error state
+* trace step 기록 (step 필드 도입; 이후 Phase가 정보를 더해 감)
 
 ### 주요 패키지
 
@@ -173,6 +174,7 @@ LLM이 선택한 Tool을 Runtime이 안전하게 실행하는 구조를 만든�
 * tool error handling
 * basic calculator tool
 * basic file read tool
+* trace에 tool call / tool result 기록
 
 ### 주요 패키지
 
@@ -372,6 +374,7 @@ internal/agent
 * `WorkerAgent` interface (transport-agnostic)
 * Routing (요청을 분류해 적절한 worker로 디스패치)
 * `WorkerAgent` → `Tool` adapter (worker를 Tool로 감싸 호출)
+* trace에 agent 식별 기록 (멀티 에이전트 실행 추적)
 
 #### Phase 7.2 — Orchestrator-Workers (7.1 위 동급)
 
@@ -512,8 +515,10 @@ local Worker와 A2A 기반 remote Worker를 동일한 Orchestrator 아래에서 
 
 ### 구현 범위 (하위 분할)
 
-이 Phase는 Worker 구성과 오케스트레이션이 선형 의존이라 feature-dir와 implement 사이클을 두 갈래로 나눈다.
-소수점 번호는 10.1로 Worker들을 갖춘 뒤 10.2가 이를 묶는 선행 의존을 뜻한다. 대부분 앞 Phase 재사용·조립이다.
+이 Phase는 Worker 구성·오케스트레이션·분산 호출 견고성이 선형 의존이라 feature-dir와 implement 사이클을 세
+갈래로 나눈다. 소수점 번호는 10.1로 Worker들을 갖춘 뒤 10.2가 이를 묶고, 10.3에서 remote 호출 견고성과 응답
+통합을 더하는 선행 의존을 뜻한다. 10.1·10.2는 대부분 앞 Phase 재사용·조립이고, 10.3은 분산 호출 실패 처리와
+streaming 통합이라는 신규 관심사다.
 
 #### Phase 10.1 — Worker Agent 구성
 
@@ -530,10 +535,13 @@ local Worker와 A2A 기반 remote Worker를 동일한 Orchestrator 아래에서 
 * plan generation
 * A2A 기반 remote worker 호출
 * local worker fallback
-* remote worker 호출 실패 처리 (timeout / 재시도 / 부분 실패 집계)
 * result aggregation
-* 다중 worker 응답의 streaming 통합 여부 결정 (Phase 4.3 streaming 계약 재사용 또는 final-only 집계)
 * final response generation
+
+#### Phase 10.3 — 견고성 & 응답 통합 (10.2 이후)
+
+* remote worker 호출 실패 처리 (timeout / 재시도 / 부분 실패 집계)
+* 다중 worker 응답의 streaming 통합 여부 결정 (Phase 4.3 streaming 계약 재사용 또는 final-only 집계)
 
 ### 주요 패키지
 
@@ -603,10 +611,12 @@ User Request
 
 ### 완료 기준
 
-* Runtime 구조가 자연스럽게 정리된다.
-* 각 package의 책임이 명확하다.
+* 각 package가 단일 책임을 갖고, package 간 import 방향에 순환이 없다.
+* trace 필드(step / action / agent / tool call / tool result / error / latency / model / token usage)가
+  단일 trace 구조로 통합되어, 한 번의 실행에서 일관된 형식으로 기록된다.
+* 미사용 임시 코드와 중복 interface가 제거되어 있다.
 * README만 보고 프로젝트 목적을 이해할 수 있다.
-* ROADMAP과 현재 코드 상태가 일치한다.
+* ROADMAP의 모든 Phase 상태가 실제 코드·commit과 일치한다.
 
 ---
 
@@ -636,6 +646,7 @@ User Request
 10. Orchestrator Runtime                        [ ]
     10.1 Worker Agent 구성
     10.2 오케스트레이션
+    10.3 견고성 & 응답 통합
 11. Runtime Refinement                          [ ]
 ```
 
