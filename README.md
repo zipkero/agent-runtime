@@ -26,7 +26,7 @@ A2A 기반 remote 실행으로 동일하게 다루는 Orchestrator 기반 Multi-
 * Agent Loop (tool-use 반복 판단) 구현
 * Tool Calling Runtime 구현
 * Single Agent 구현 (Web Search / File / Code Tool 포함)
-* RAG Tool 구현
+* RAG Runtime 구현
 * Memory Runtime (단기 / 장기) 구현
 * Multi-Agent Runtime 구현
 * Routing / Orchestrator-Workers 등 Multi-Agent 협력 패턴 구현
@@ -148,6 +148,16 @@ logger는 별도 패키지를 두지 않고, 이 진입점에서 `internal/confi
 * 실행 timeout 등 제한 기본값
 * 외부 연동(Tavily, Postgres 등) 설정 값 제공
 * logger 설정 값(로그 레벨 등) 제공
+
+필요한 환경변수와 최초 등장 Phase는 다음과 같다. 값 자체는 `.env.example`이 소유하고, 여기서는 목록만 둔다.
+
+| 환경변수                            | 용도                          | 최초 필요 Phase |
+| ---------------------------------- | ----------------------------- | -------------- |
+| `LLM_PROVIDER` / `LLM_MODEL` / `LLM_HOST` | LLM provider·모델 선택, 호출  | Phase 1        |
+| `LLM_API_KEY`                      | claude provider 호출 키        | Phase 1        |
+| `LLM_TIMEOUT`                      | LLM 호출 timeout               | Phase 1        |
+| `TAVILY_API_KEY`                   | 웹 검색 Tool                   | Phase 4.1      |
+| Postgres DSN (Phase 5.1에서 추가)    | pgvector / 장기 메모리          | Phase 5.1      |
 
 ### `internal/llm`
 
@@ -342,6 +352,12 @@ system prompt, tool 목록, worker 구성은 코드에 박지 않고 주입받�
 
 Tool Calling은 LLM의 자연어 응답에 의존하지 않고 명확한 schema 기반으로 처리합니다.
 
+### 테스트는 stub으로 격리한다
+
+Runtime 본체 로직은 stub `LLMClient`와 stub 외부 클라이언트로 단위 테스트하고, 외부 인프라(실제 LLM
+API·Tavily·Postgres) 의존 경로는 통합 테스트로 분리한다. 각 Phase 완료 기준의 "CLI 1회 실행"은 통합
+확인이며, 본체 판단 로직은 stub 기반 단위 테스트로 검증한다.
+
 ### 제어 흐름은 일반 Go 코드로 표현한다
 
 Agent의 반복 판단과 분기는 평범한 Go 제어 흐름으로 표현합니다.
@@ -397,7 +413,8 @@ Agent는 실행 과정이 중요합니다.
 이 필드들은 한 번에 갖춰지지 않고, 각 Phase가 자신이 도입한 정보를 더하며 자랍니다. step과 action은 Phase 2,
 tool call / tool result는 Phase 3, agent는 Phase 7에서 더해집니다. error는 Phase 2의 error state에서 시작해
 Phase 3의 tool error handling으로 확장되고, latency / model / token usage는 LLM·Runner 계층에서 채워지며,
-Phase 11에서 trace 구조를 하나로 정리합니다. 각 Phase의 실제 진행 상태는 `ROADMAP.md`가 소유합니다.
+trace 구조 자체는 Phase 2에서 한 번 세우고 이후엔 같은 구조에 필드만 더해, Phase 11은 필드 이름 통일·
+중복 제거 같은 마무리만 합니다. 각 Phase의 실제 진행 상태는 `ROADMAP.md`가 소유합니다.
 
 ## 최종 산출물
 
@@ -420,14 +437,35 @@ Phase 11에서 trace 구조를 하나로 정리합니다. 각 Phase의 실제 �
 
 이 프로젝트는 Agent Runtime을 직접 만드는 데 집중합니다.
 
-아래 항목은 범위에서 빼되, Runtime 완성 후 확장 과제로 다룰 수 있습니다. 목록은 `ROADMAP.md`의 「확장 과제」와
-동일합니다.
+아래 항목은 현재 범위에서 빼되, Runtime 완성 후 확장 과제로 다룰 수 있습니다. 이 목록의 단일 출처는 이 절이며,
+`ROADMAP.md`의 「확장 과제」가 이를 참조합니다.
 
-* Web UI
-* SaaS 멀티 테넌시
-* Kubernetes 배포
-* OpenTelemetry / Datadog 연동
-* 복잡한 권한 시스템
-* Agent Harness
+이 Runtime을 최종적으로 무엇으로 만들지(임베드용 라이브러리 / 단일 사용자 CLI 도구 / 다중 사용자 API 서비스
+등)는 아직 정하지 않았다. 그 결정이 아래 「외부 서비스로 노출할 때만 필요」 항목의 실제 필요 범위를 정한다. 용도가
+정해지면 이 절을 갱신한다.
+
+### production이면 용도와 무관하게 필요
+
+Runtime을 실제로 운영(외부 API 호출·비용 발생)하는 순간 필요해지는 항목이다. 어떤 용도든 production 전환 시
+공통으로 검토한다.
+
+* 비용·토큰 예산 제어 (상한 / 차단 / 쿼터)
+* 외부 호출 전반의 재시도·백오프·서킷브레이커 (LLM / 임베딩 / 검색 / DB)
+* 시크릿 관리 (`.env` 너머 Vault·KMS, 키 로테이션)
+* 보안 격리·위협모델 (Code Execution Tool 샌드박싱, 프롬프트 인젝션 대응)
+* DB 스키마 마이그레이션·백업/복구
+* CI/CD 파이프라인
+
+### 외부 서비스로 노출할 때만 필요
+
+Runtime을 독립 서비스로 띄우거나 다중 사용자에게 제공할 때만 필요하다. 임베드용 라이브러리로 쓰면 호출하는
+쪽이 책임진다.
+
 * HTTP API / Agent Server 진입점
-* 운영형 Agent Gateway
+* 인증 / 인가 (복잡한 권한 시스템 포함)
+* 요청 단위 rate limit·동시성 제어
+* 관찰가능성 표준 연동 (OpenTelemetry / Datadog), 메트릭·알람·SLO
+* SaaS 멀티 테넌시 (사용자별 메모리/RAG 데이터 격리)
+* Kubernetes 배포·오토스케일, 운영형 Agent Gateway
+* Web UI
+* Agent Harness

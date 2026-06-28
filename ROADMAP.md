@@ -6,9 +6,8 @@
 
 대신 하나의 Go Agent Runtime 코드베이스를 계속 개선하며, 각 단계의 개념을 Runtime 기능으로 흡수합니다.
 
-도착점은 **여러 Agent가 역할을 나눠 협력하고, 그 Agent들을 local 실행과 A2A 기반 remote 실행으로 동일하게
-다루는 Orchestrator 기반 Multi-Agent System**입니다. 앞 단계(LLM·Agent loop·Tool·RAG·Memory)는 이
-도착점을 떠받치는 구성 요소입니다.
+도착점은 `README.md` 「이 프로젝트가 향하는 곳」이 정의하는 **Orchestrator 기반 Multi-Agent System**입니다.
+앞 단계(LLM·Agent loop·Tool·RAG·Memory)는 이 도착점을 떠받치는 구성 요소입니다.
 
 ## 진행 원칙
 
@@ -51,7 +50,7 @@ Go 기반 Agent Runtime 프로젝트의 기본 구조를 만든다.
 * Go module 생성
 * 기본 디렉터리 구조 구성
 * config loader
-* logger
+* logger (별도 패키지 없이 진입점에서 config 설정으로 초기화)
 * CLI entry point
 * `.env` 로딩
 * 기본 README / ROADMAP 문서 작성
@@ -131,7 +130,7 @@ Agent가 단발성 LLM 호출이 아니라, 상태를 유지하며 반복적으�
 * final answer detection
 * max steps
 * error state
-* trace step 기록 (step 필드 도입; 이후 Phase가 정보를 더해 감)
+* trace 구조 도입 (step/action을 담는 단일 trace struct; 이후 Phase는 같은 구조에 필드만 더한다)
 
 ### 주요 패키지
 
@@ -398,7 +397,6 @@ prompt·tool 구성만 교체·확장한다. 즉 7.3 → 10.1은 인터페이스
 
 ```text
 internal/multiagent
-internal/orchestrator
 internal/agent
 ```
 
@@ -414,10 +412,9 @@ internal/agent
 
 ### 완료 기준
 
-* Orchestrator가 사용자 요청을 task로 분해한다.
-* 적절한 WorkerAgent를 선택(routing)한다.
-* WorkerAgent 결과를 수집한다.
-* 최종 응답을 합성한다.
+* orchestrator-workers 패턴으로 사용자 요청을 task로 분해할 수 있다.
+* routing이 task를 적절한 WorkerAgent로 디스패치한다.
+* WorkerAgent 결과를 수집해 합성할 수 있다.
 * Worker interface가 local/remote 어느 쪽으로도 구현될 수 있는 형태다.
 
 ---
@@ -613,7 +610,7 @@ User Request
 
 * 각 package가 단일 책임을 갖고, package 간 import 방향에 순환이 없다.
 * trace 필드(step / action / agent / tool call / tool result / error / latency / model / token usage)가
-  단일 trace 구조로 통합되어, 한 번의 실행에서 일관된 형식으로 기록된다.
+  Phase 2부터 써 온 단일 trace 구조 안에서 일관된 형식으로 기록되고, 이름·중복이 최종 정리되어 있다.
 * 미사용 임시 코드와 중복 interface가 제거되어 있다.
 * README만 보고 프로젝트 목적을 이해할 수 있다.
 * ROADMAP의 모든 Phase 상태가 실제 코드·commit과 일치한다.
@@ -676,20 +673,13 @@ User Request
 * README 또는 ROADMAP에 현재 상태가 반영되어 있다.
 * 최소 하나 이상의 실패 케이스가 정리되어 있다.
 
+외부 의존이 필요한 Phase는 위 "CLI 1회 실행" 확인에 해당 인프라·키 준비가 전제된다. LLM API key는 Phase 1,
+Tavily API key는 Phase 4.1, Postgres + pgvector는 Phase 5.1에서 처음 필요하며, Phase 6.2는 Phase 5의
+Postgres 인프라를 재사용한다.
+
 # 확장 과제
 
-다음 항목은 Runtime 완성 후 진행한다. 목록은 `README.md`의 「제외 범위」와 동일하다.
-
-```text
-Web UI
-SaaS 멀티 테넌시
-Kubernetes 배포
-OpenTelemetry / Datadog 연동
-복잡한 권한 시스템
-Agent Harness
-HTTP API / Agent Server 진입점
-운영형 Agent Gateway
-```
+다음 항목은 Runtime 완성 후 진행한다. 목록의 단일 출처는 `README.md`의 「제외 범위」이며, 여기서는 반복하지 않는다.
 
 # 최종 완료 기준
 
@@ -700,7 +690,7 @@ LLM 기반 Agent 의사결정 구조
 Agent Loop (tool-use 반복)
 Tool Calling Runtime
 Single Agent Runtime
-RAG Agent
+RAG Runtime
 Multi-Agent Runtime (Routing / Orchestrator-Workers)
 Memory Runtime
 MCP Tool Adapter
