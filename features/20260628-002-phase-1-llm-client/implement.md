@@ -2,7 +2,7 @@
 
 ## 체크리스트
 
-- [ ] task-001: 메시지와 LLM 호출 contract 작성
+- [x] task-001: 메시지와 LLM 호출 contract 작성
   - 목적: Runtime 내부에서 Claude와 Ollama를 같은 방식으로 호출하고, 이후 Agent loop와 Tool Runtime이 재사용할
     메시지·응답 타입을 제공한다.
   - 접근: `internal/message`에 role, text, tool call, tool result 표현을 만들고, `internal/llm`에
