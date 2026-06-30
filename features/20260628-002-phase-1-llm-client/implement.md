@@ -16,7 +16,7 @@
   - 참조: SPEC §5.2, SPEC §5.3, SPEC §5.4, SPEC §5.6, ANALYSIS §1, ANALYSIS §3, ANALYSIS §5.3,
     ANALYSIS §5.5
 
-- [ ] task-002: Claude provider adapter 작성
+- [x] task-002: Claude provider adapter 작성
   - 목적: `LLM_PROVIDER=claude` 설정에서 Claude Messages API를 실제 호출할 수 있고, 필수 설정 누락과 provider 오류를
     비밀값 노출 없이 확인할 수 있게 한다.
   - 접근: `internal/llm`에 표준 `net/http` 기반 Claude adapter를 추가하고, 내부 `ChatRequest`를 Messages API request로
