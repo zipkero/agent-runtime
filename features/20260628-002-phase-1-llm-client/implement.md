@@ -30,7 +30,7 @@
   - 참조: SPEC §5.2, SPEC §5.4, SPEC §5.5, SPEC §5.6, ANALYSIS §1, ANALYSIS §2, ANALYSIS §3,
     ANALYSIS §5.1, ANALYSIS §5.4, ANALYSIS §5.5
 
-- [ ] task-003: Ollama provider adapter 작성
+- [x] task-003: Ollama provider adapter 작성
   - 목적: `LLM_PROVIDER=ollama` 설정에서 설정된 host와 model로 Ollama Chat API를 실제 호출하고, 응답 text를
     provider-neutral response로 받을 수 있게 한다.
   - 접근: `internal/llm`에 표준 `net/http` 기반 Ollama adapter를 추가하고, 내부 `ChatRequest`를
