@@ -96,8 +96,9 @@ Final 통합
 
 ## 프로젝트 구조
 
-아래는 목표 구조입니다. Phase 0 기준으로 `go.mod`, `cmd/agent-runtime`, `internal/config`, `.env.example`,
-`.gitignore`, `README.md`, `ROADMAP.md`가 존재하며, 나머지 Runtime 패키지는 이후 Phase에서 차례로 만들어집니다.
+아래는 목표 구조입니다. Phase 1 기준으로 `cmd/agent-runtime`, `internal/config`, `internal/llm`,
+`internal/message`, `.env.example`, `.gitignore`, `README.md`, `ROADMAP.md`가 존재하며, 나머지 Runtime 패키지는
+이후 Phase에서 차례로 만들어집니다.
 
 ```text
 agent-runtime/
@@ -106,8 +107,8 @@ agent-runtime/
 │       └── main.go
 ├── internal/
 │   ├── config/
-│   ├── llm/                 (예정)
-│   ├── message/             (예정)
+│   ├── llm/
+│   ├── message/
 │   ├── agent/               (예정)
 │   ├── tool/                (예정)
 │   ├── rag/                 (예정)
@@ -130,11 +131,18 @@ agent-runtime/
 
 Runtime 실행 진입점입니다.
 
-초기에는 CLI 중심으로 시작합니다. HTTP API 또는 Agent Server 형태로의 확장은 본 로드맵 범위 밖의 확장
-과제로 다룹니다.
+Phase 1에서는 단발 CLI 실행 경로를 제공합니다. positional argument가 있으면 이를 prompt로 사용하고, 인자가
+없으면 stdin 전체를 prompt로 읽어 설정된 LLM provider를 한 번 호출합니다.
 
-logger는 별도 패키지를 두지 않고, 이 진입점에서 `internal/config`가 제공하는 로그 설정(레벨 등)으로
-초기화합니다.
+성공 시 provider 응답 text만 stdout에 출력하고, 입력·설정·provider 오류는 stderr와 non-zero exit로 처리합니다.
+HTTP API 또는 Agent Server 형태로의 확장은 본 로드맵 범위 밖의 확장 과제로 다룹니다.
+
+실행 예시는 다음과 같습니다.
+
+```bash
+go run ./cmd/agent-runtime "요약해줘"
+echo "요약해줘" | go run ./cmd/agent-runtime
+```
 
 ### `internal/config`
 
@@ -169,11 +177,12 @@ provider도 같은 interface 뒤에서 다룰 수 있습니다.
 주요 책임:
 
 * Chat request / response 정의
-* Message 구조 정의
 * Tool call response 처리
-* Structured output 처리
-* Streaming response 처리
-* Provider별 client 구현 (실제 API 호출)
+* Claude provider client 구현
+* Ollama provider client 구현
+* provider 선택과 필수 설정 검증
+* provider 오류와 timeout 오류 구분
+* HTTP 기반 실제 provider 호출
 * 테스트용 stub client (실행 경로는 실제 API, 테스트만 stub 교체)
 
 ### `internal/message`

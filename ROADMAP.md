@@ -24,7 +24,7 @@ Runtime 본체는 직접 만들고, 외부 연결(LLM·임베딩·웹 검색·�
 
 ```text
 [x] Phase 0  Project Foundation
-[ ] Phase 1  LLM Client          (Claude + Ollama 로컬 provider)
+[x] Phase 1  LLM Client          (Claude + Ollama 로컬 provider)
 [ ] Phase 2  Agent Loop
 [ ] Phase 3  Tool Calling Runtime
 [ ] Phase 4  Single Agent Runtime (4.1 Tool 묶음 / 4.2 실행 구조 / 4.3 Streaming)
@@ -71,7 +71,7 @@ internal/config
 
 ---
 
-## Phase 1. LLM 기반 의사결정 구조 — 예정
+## Phase 1. LLM 기반 의사결정 구조 — 완료
 
 ### 목표
 
@@ -87,10 +87,11 @@ LLM을 Agent Runtime의 판단 주체로 사용하기 위한 기본 추상화를
 * `ToolResult`
 * 실제 Claude API를 호출하는 client
 * 로컬 모델 provider (Ollama, tool calling 포함)
-* GPT 등 다른 provider는 같은 `LLMClient` interface로 추가 (예정)
+* GPT 등 다른 provider는 같은 `LLMClient` interface 뒤에 추가 가능
 * 테스트용 stub client
 * model / api key config
 * context timeout 처리
+* 단발 CLI prompt 입력과 provider 응답 stdout 출력
 
 ### 주요 패키지
 
@@ -620,8 +621,8 @@ User Request
 # 진행 순서 요약
 
 ```text
-00. Project Foundation                         [ ]
-01. LLM Client (Claude + Ollama)               [ ]
+00. Project Foundation                         [x]
+01. LLM Client (Claude + Ollama)               [x]
 02. Agent Loop                                  [ ]
 03. Tool Calling Runtime                        [ ]
 04. Single Agent Runtime                        [ ]

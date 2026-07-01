@@ -44,7 +44,7 @@
   - 참조: SPEC §5.3, SPEC §5.4, SPEC §5.5, SPEC §5.6, ANALYSIS §1, ANALYSIS §2, ANALYSIS §3,
     ANALYSIS §5.1, ANALYSIS §5.5
 
-- [ ] task-004: CLI 단발 LLM 실행 경로 연결
+- [x] task-004: CLI 단발 LLM 실행 경로 연결
   - 목적: 저장소 루트에서 CLI에 prompt를 전달하면 설정된 provider를 한 번 호출하고 응답 text를 stdout에 출력한다.
   - 접근: `cmd/agent-runtime`을 Phase 0 시작 로그 출력에서 단발 LLM 호출 경로로 바꾼다. positional argument를
     우선 prompt로 사용하고 인자가 없으면 stdin 전체를 읽으며, prompt 공백, provider 설정 오류, provider 오류는
@@ -57,7 +57,7 @@
   - 참조: SPEC §5.1, SPEC §5.2, SPEC §5.3, SPEC §5.5, SPEC §5.6, ANALYSIS §1, ANALYSIS §2,
     ANALYSIS §3, ANALYSIS §5.2
 
-- [ ] task-005: Phase 1 문서와 설정 예시 정합성 확인
+- [x] task-005: Phase 1 문서와 설정 예시 정합성 확인
   - 목적: Phase 1 이후 로컬 실행자가 provider별 필수 설정과 단발 CLI 실행 방식을 문서에서 확인할 수 있게 한다.
   - 접근: 구현 결과와 `.env.example`, `README.md`, `ROADMAP.md`를 비교해 provider별 필수값, 실행 예시, Phase 진행 상태가
     다르면 요청 범위 안에서 갱신한다. 비밀값 파일인 `.env` ignore 규칙은 유지한다.

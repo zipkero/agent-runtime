@@ -8,7 +8,7 @@ contract를 고정한다.
 ## 상태
 - [x] SPEC
 - [x] ANALYSIS
-- [ ] IMPLEMENT
+- [x] IMPLEMENT
 
 ## 문서
 - [spec.md](./spec.md)
@@ -19,3 +19,4 @@ contract를 고정한다.
 - 2026-06-28: SPEC 작성
 - 2026-06-28: ANALYSIS 작성
 - 2026-06-28: IMPLEMENT 체크리스트 작성
+- 2026-07-01: IMPLEMENT 완료
