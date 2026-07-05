@@ -2,7 +2,7 @@
 
 ## 체크리스트
 
-- [ ] task-001: Agent 실행 API와 final 응답 상태
+- [x] task-001: Agent 실행 API와 final 응답 상태
   - 목적: 호출자가 사용자 입력 하나로 Agent run을 실행하고, 초기 user message와 assistant final 응답이 누적된
     최종 상태를 확인할 수 있다.
   - 접근: 새 `internal/agent` 패키지에 `Options`, `Agent`, `AgentState`, `Status`와 `New`, `Run`을 추가한다.
