@@ -39,7 +39,7 @@
       경로를 검증하고, `go test ./...`가 통과한다.
   - 참조: SPEC §5.5, SPEC §5.6, SPEC §5.8, ANALYSIS §1, ANALYSIS §2, ANALYSIS §3, ANALYSIS §5
 
-- [ ] task-004: 메모리 trace 기록
+- [x] task-004: 메모리 trace 기록
   - 목적: 호출자가 테스트에서 각 step의 주요 action 순서와 run 종료 이유를 `AgentState.Trace`로 확인할 수 있다.
   - 접근: `TraceEvent`에 step, action, status 또는 result, error 참조를 담고, user message 저장, LLM 요청, LLM 응답,
     final 종료, tool 대기 종료, max step 종료, LLM 오류 종료를 메모리 trace에 기록한다. 파일, JSON, stdout, stderr

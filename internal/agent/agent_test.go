@@ -29,6 +29,29 @@ func (c *stubClient) Chat(_ context.Context, req llm.ChatRequest) (llm.ChatRespo
 	return c.response, nil
 }
 
+type expectedTrace struct {
+	step    int
+	action  TraceAction
+	status  Status
+	wantErr error
+}
+
+func assertTrace(t *testing.T, got []TraceEvent, want []expectedTrace) {
+	t.Helper()
+
+	if len(got) != len(want) {
+		t.Fatalf("len(Trace) = %d, want %d: %+v", len(got), len(want), got)
+	}
+	for i := range want {
+		if got[i].Step != want[i].step || got[i].Action != want[i].action || got[i].Status != want[i].status {
+			t.Fatalf("Trace[%d] = %+v, want step=%d action=%q status=%q", i, got[i], want[i].step, want[i].action, want[i].status)
+		}
+		if !errors.Is(got[i].Error, want[i].wantErr) {
+			t.Fatalf("Trace[%d].Error = %v, want %v", i, got[i].Error, want[i].wantErr)
+		}
+	}
+}
+
 // TestRunStoresUserMessageAndFinalAssistantResponse 는 Task 001의 final 정상 경로 contract를 고정한다.
 func TestRunStoresUserMessageAndFinalAssistantResponse(t *testing.T) {
 	client := &stubClient{
@@ -78,6 +101,12 @@ func TestRunStoresUserMessageAndFinalAssistantResponse(t *testing.T) {
 	if state.Messages[1].Role != message.RoleAssistant || state.Messages[1].Text != "answer text" {
 		t.Fatalf("state assistant message = %+v, want role=assistant text=answer text", state.Messages[1])
 	}
+	assertTrace(t, state.Trace, []expectedTrace{
+		{step: 0, action: TraceActionUserMessage, status: StatusRunning},
+		{step: 1, action: TraceActionLLMRequest, status: StatusRunning},
+		{step: 1, action: TraceActionLLMResponse, status: StatusRunning},
+		{step: 1, action: TraceActionFinal, status: StatusFinal},
+	})
 }
 
 // TestRunStopsWithNeedsActionWhenAssistantRequestsTool 는 tool 실행 없는 대기 상태 contract를 고정한다.
@@ -134,6 +163,12 @@ func TestRunStopsWithNeedsActionWhenAssistantRequestsTool(t *testing.T) {
 	if assistant.ToolResult != nil {
 		t.Fatalf("assistant ToolResult = %+v, want nil", assistant.ToolResult)
 	}
+	assertTrace(t, state.Trace, []expectedTrace{
+		{step: 0, action: TraceActionUserMessage, status: StatusRunning},
+		{step: 1, action: TraceActionLLMRequest, status: StatusRunning},
+		{step: 1, action: TraceActionLLMResponse, status: StatusRunning},
+		{step: 1, action: TraceActionNeedsAction, status: StatusNeedsAction},
+	})
 }
 
 // TestRunStopsBeforeLLMWhenMaxStepsReached 는 max step 초과 시 provider 호출이 없는지 확인한다.
@@ -169,6 +204,10 @@ func TestRunStopsBeforeLLMWhenMaxStepsReached(t *testing.T) {
 	if state.Messages[0].Role != message.RoleUser || state.Messages[0].Text != "hello runtime" {
 		t.Fatalf("state user message = %+v, want role=user text=hello runtime", state.Messages[0])
 	}
+	assertTrace(t, state.Trace, []expectedTrace{
+		{step: 0, action: TraceActionUserMessage, status: StatusRunning},
+		{step: 0, action: TraceActionMaxSteps, status: StatusMaxSteps},
+	})
 }
 
 // TestRunStoresLLMErrorWithoutAssistantMessage 는 LLM 오류가 상태에 남고 assistant가 누적되지 않는지 확인한다.
@@ -201,4 +240,9 @@ func TestRunStoresLLMErrorWithoutAssistantMessage(t *testing.T) {
 	if state.Messages[0].Role != message.RoleUser || state.Messages[0].Text != "hello runtime" {
 		t.Fatalf("state user message = %+v, want role=user text=hello runtime", state.Messages[0])
 	}
+	assertTrace(t, state.Trace, []expectedTrace{
+		{step: 0, action: TraceActionUserMessage, status: StatusRunning},
+		{step: 1, action: TraceActionLLMRequest, status: StatusRunning},
+		{step: 1, action: TraceActionLLMError, status: StatusError, wantErr: llmErr},
+	})
 }
