@@ -44,9 +44,9 @@ Phase 2는 새 `internal/agent` 패키지가 Agent run의 상태, step 진행, �
 error 경로에 반영하므로, LLM 호출 오류를 Go return error만으로 숨기지 않는다(SPEC §5.1, SPEC §5.5, SPEC §5.6).
 
 `AgentState`는 run의 단일 소유 상태다. 필요한 필드는 `Messages []message.Message`, `Step int`, `Status`, `FinalAnswer`,
-`PendingToolCalls []message.ToolCall`, `LastError error`, `Trace []TraceEvent`다. `Messages`는 LLM 입력으로 전달되는
-대화 상태이자 호출자가 최종 상태를 확인하는 근거다. `FinalAnswer`와 `PendingToolCalls`는 마지막 assistant message에서
-도출되는 편의 상태이며, 원본 정보는 반드시 `Messages` 안에도 남긴다(SPEC §5.2, SPEC §5.3, SPEC §5.4).
+`ToolCalls []message.ToolCall`, `LastError error`, `Trace []TraceEvent`다. `Messages`는 LLM 입력으로 전달되는 대화
+상태이자 호출자가 최종 상태를 확인하는 근거다. `FinalAnswer`와 `ToolCalls`는 마지막 assistant message에서 도출되는
+편의 상태이며, 원본 정보는 반드시 `Messages` 안에도 남긴다(SPEC §5.2, SPEC §5.3, SPEC §5.4).
 
 `Status`는 최소한 `running`, `final`, `needs_action`, `max_steps`, `error`를 구분한다. Phase 2에서는 tool call이 있으면
 tool 실행을 시도하지 않고 `needs_action`으로 종료한다. `max_steps`는 실패 오류가 아니라 허용 step 정책에 따른 종료
@@ -70,8 +70,8 @@ LLM이 assistant message를 반환하면 Agent는 응답 message를 `Messages` �
 남겨 호출자가 누적 메시지와 final answer를 모두 확인할 수 있게 한다(SPEC §5.2, SPEC §5.3, SPEC §5.7).
 
 Assistant message에 하나 이상의 tool call이 있으면 Agent는 tool registry나 tool executor를 호출하지 않는다.
-대신 assistant message를 상태에 append한 뒤 `PendingToolCalls`에 같은 tool call 목록을 복사하고 `Status`를
-`needs_action`으로 바꾼다. tool call의 ID, name, arguments는 `message.ToolCall` 그대로 보존한다. 이 흐름은 Phase 2의
+대신 assistant message를 상태에 append한 뒤 `ToolCalls`에 같은 tool call 목록을 복사하고 `Status`를 `needs_action`으로
+바꾼다. tool call의 ID, name, arguments는 `message.ToolCall` 그대로 보존한다. 이 흐름은 Phase 2의
 안전한 멈춤 지점이며, 이후 Tool Calling Runtime은 이 상태를 이어받아 tool 실행과 tool result message 생성을 붙일 수
 있다(SPEC §5.4).
 

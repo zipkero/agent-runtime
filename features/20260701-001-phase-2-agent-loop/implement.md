@@ -14,14 +14,14 @@
     - 확인: `internal/agent` 테스트에서 정상 final run을 stub client로 검증하고, `go test ./...`가 통과한다.
   - 참조: SPEC §5.1, SPEC §5.2, SPEC §5.3, SPEC §5.8, ANALYSIS §1, ANALYSIS §2, ANALYSIS §3, ANALYSIS §4
 
-- [ ] task-002: tool call 대기 상태
+- [x] task-002: tool call 대기 상태
   - 목적: assistant 응답에 tool call이 있으면 Agent run이 tool을 실행하지 않고 추가 행동 필요 상태로 멈추며, 호출자가
     tool call 정보를 상태와 메시지에서 확인할 수 있다.
   - 접근: `Run`의 assistant 응답 처리에서 `Message.ToolCalls`가 비어 있지 않으면 assistant message를 누적하고,
-    같은 tool call 목록을 `AgentState.PendingToolCalls`에 보존한 뒤 `needs_action` 상태로 종료한다. Tool registry,
+    같은 tool call 목록을 `AgentState.ToolCalls`에 보존한 뒤 `needs_action` 상태로 종료한다. Tool registry,
     unknown tool 처리, tool result message 생성은 추가하지 않는다.
   - 검증 조건:
-    - 결과: tool call 응답 run은 `needs_action` 상태로 끝나고, `PendingToolCalls`와 마지막 assistant message에 같은
+    - 결과: tool call 응답 run은 `needs_action` 상태로 끝나고, `ToolCalls`와 마지막 assistant message에 같은
       tool call ID, name, arguments가 남으며, tool 실행이나 tool result message는 발생하지 않는다.
     - 확인: `internal/agent` 테스트에서 tool call 응답을 반환하는 stub client로 상태와 메시지 보존을 검증하고,
       `go test ./...`가 통과한다.

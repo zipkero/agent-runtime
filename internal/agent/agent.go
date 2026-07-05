@@ -12,8 +12,9 @@ import (
 type Status string
 
 const (
-	StatusRunning Status = "running"
-	StatusFinal   Status = "final"
+	StatusRunning     Status = "running"
+	StatusFinal       Status = "final"
+	StatusNeedsAction Status = "needs_action"
 )
 
 // Options 는 Agent run 실행에 필요한 provider-neutral 의존성과 정책이다.
@@ -36,6 +37,7 @@ type AgentState struct {
 	Step        int
 	Status      Status
 	FinalAnswer string
+	ToolCalls   []message.ToolCall
 }
 
 func New(opts Options) (*Agent, error) {
@@ -67,9 +69,13 @@ func (a *Agent) Run(ctx context.Context, input string) AgentState {
 	}
 
 	state.Messages = append(state.Messages, resp.Message)
-	if len(resp.Message.ToolCalls) == 0 {
-		state.Status = StatusFinal
-		state.FinalAnswer = resp.Message.Text
+	if len(resp.Message.ToolCalls) > 0 {
+		state.Status = StatusNeedsAction
+		state.ToolCalls = append([]message.ToolCall(nil), resp.Message.ToolCalls...)
+		return state
 	}
+
+	state.Status = StatusFinal
+	state.FinalAnswer = resp.Message.Text
 	return state
 }
