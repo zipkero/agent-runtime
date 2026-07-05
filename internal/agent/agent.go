@@ -15,6 +15,8 @@ const (
 	StatusRunning     Status = "running"
 	StatusFinal       Status = "final"
 	StatusNeedsAction Status = "needs_action"
+	StatusMaxSteps    Status = "max_steps"
+	StatusError       Status = "error"
 )
 
 // Options 는 Agent run 실행에 필요한 provider-neutral 의존성과 정책이다.
@@ -38,6 +40,7 @@ type AgentState struct {
 	Status      Status
 	FinalAnswer string
 	ToolCalls   []message.ToolCall
+	LastError   error
 }
 
 func New(opts Options) (*Agent, error) {
@@ -58,6 +61,11 @@ func (a *Agent) Run(ctx context.Context, input string) AgentState {
 	}
 	state.Messages = append(state.Messages, message.User(input))
 
+	if state.Step >= a.maxSteps {
+		state.Status = StatusMaxSteps
+		return state
+	}
+
 	reqMessages := append([]message.Message(nil), state.Messages...)
 	state.Step++
 	resp, err := a.client.Chat(ctx, llm.ChatRequest{
@@ -65,6 +73,8 @@ func (a *Agent) Run(ctx context.Context, input string) AgentState {
 		Messages: reqMessages,
 	})
 	if err != nil {
+		state.Status = StatusError
+		state.LastError = err
 		return state
 	}
 

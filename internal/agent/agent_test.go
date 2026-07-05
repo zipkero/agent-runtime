@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"testing"
 
 	"github.com/zipkero/agent-runtime/internal/llm"
@@ -11,6 +12,7 @@ import (
 
 type stubClient struct {
 	response llm.ChatResponse
+	err      error
 	request  llm.ChatRequest
 	calls    int
 }
@@ -20,6 +22,9 @@ func (c *stubClient) Chat(_ context.Context, req llm.ChatRequest) (llm.ChatRespo
 	c.request = llm.ChatRequest{
 		Model:    req.Model,
 		Messages: append([]message.Message(nil), req.Messages...),
+	}
+	if c.err != nil {
+		return llm.ChatResponse{}, c.err
 	}
 	return c.response, nil
 }
@@ -128,5 +133,72 @@ func TestRunStopsWithNeedsActionWhenAssistantRequestsTool(t *testing.T) {
 	}
 	if assistant.ToolResult != nil {
 		t.Fatalf("assistant ToolResult = %+v, want nil", assistant.ToolResult)
+	}
+}
+
+// TestRunStopsBeforeLLMWhenMaxStepsReached 는 max step 초과 시 provider 호출이 없는지 확인한다.
+func TestRunStopsBeforeLLMWhenMaxStepsReached(t *testing.T) {
+	client := &stubClient{
+		response: llm.ChatResponse{
+			Message: message.Assistant("should not be used"),
+		},
+	}
+	agent, err := New(Options{
+		Client:   client,
+		Model:    "test-model",
+		MaxSteps: 0,
+	})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	state := agent.Run(context.Background(), "hello runtime")
+
+	if client.calls != 0 {
+		t.Fatalf("client calls = %d, want 0", client.calls)
+	}
+	if state.Status != StatusMaxSteps {
+		t.Fatalf("state Status = %q, want %q", state.Status, StatusMaxSteps)
+	}
+	if state.LastError != nil {
+		t.Fatalf("LastError = %v, want nil", state.LastError)
+	}
+	if len(state.Messages) != 1 {
+		t.Fatalf("len(state Messages) = %d, want 1", len(state.Messages))
+	}
+	if state.Messages[0].Role != message.RoleUser || state.Messages[0].Text != "hello runtime" {
+		t.Fatalf("state user message = %+v, want role=user text=hello runtime", state.Messages[0])
+	}
+}
+
+// TestRunStoresLLMErrorWithoutAssistantMessage 는 LLM 오류가 상태에 남고 assistant가 누적되지 않는지 확인한다.
+func TestRunStoresLLMErrorWithoutAssistantMessage(t *testing.T) {
+	llmErr := errors.New("llm failed")
+	client := &stubClient{err: llmErr}
+	agent, err := New(Options{
+		Client:   client,
+		Model:    "test-model",
+		MaxSteps: 3,
+	})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	state := agent.Run(context.Background(), "hello runtime")
+
+	if client.calls != 1 {
+		t.Fatalf("client calls = %d, want 1", client.calls)
+	}
+	if state.Status != StatusError {
+		t.Fatalf("state Status = %q, want %q", state.Status, StatusError)
+	}
+	if !errors.Is(state.LastError, llmErr) {
+		t.Fatalf("LastError = %v, want %v", state.LastError, llmErr)
+	}
+	if len(state.Messages) != 1 {
+		t.Fatalf("len(state Messages) = %d, want 1", len(state.Messages))
+	}
+	if state.Messages[0].Role != message.RoleUser || state.Messages[0].Text != "hello runtime" {
+		t.Fatalf("state user message = %+v, want role=user text=hello runtime", state.Messages[0])
 	}
 }

@@ -27,7 +27,7 @@
       `go test ./...`가 통과한다.
   - 참조: SPEC §5.4, SPEC §5.8, ANALYSIS §1, ANALYSIS §2, ANALYSIS §4, ANALYSIS §5
 
-- [ ] task-003: max step과 LLM 오류 종료 상태
+- [x] task-003: max step과 LLM 오류 종료 상태
   - 목적: Agent run이 설정된 max step을 넘겨 LLM을 호출하지 않고 멈추며, LLM 호출 오류는 상태의 error 경로와 원인
     오류로 확인할 수 있다.
   - 접근: 매 LLM 호출 직전에 `Step >= MaxSteps`를 검사해 초과 시 `max_steps` 상태로 종료하고 client를 호출하지 않는다.
