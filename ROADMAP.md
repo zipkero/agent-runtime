@@ -25,7 +25,7 @@ Runtime 본체는 직접 만들고, 외부 연결(LLM·임베딩·웹 검색·�
 ```text
 [x] Phase 0  Project Foundation
 [x] Phase 1  LLM Client          (Claude + Ollama 로컬 provider)
-[ ] Phase 2  Agent Loop
+[x] Phase 2  Agent Loop
 [ ] Phase 3  Tool Calling Runtime
 [ ] Phase 4  Single Agent Runtime (4.1 Tool 묶음 / 4.2 실행 구조 / 4.3 Streaming)
 [ ] Phase 5  RAG Runtime          (5.1 인덱싱 / 5.2 검색·활용)
@@ -116,22 +116,25 @@ internal/config
 
 ---
 
-## Phase 2. Agent Loop — 예정
+## Phase 2. Agent Loop — 완료
 
 ### 목표
 
-Agent가 단발성 LLM 호출이 아니라, 상태를 유지하며 반복적으로 판단하는 구조임을 코드로 표현한다.
+Agent가 단발성 LLM 호출 결과만 반환하는 것이 아니라, 메시지 상태와 종료 상태를 보존하며 판단하는 구조임을 코드로
+표현한다. Phase 2에서는 Tool 실행까지 반복하지 않고, assistant 응답에 tool call이 있으면 추가 행동 필요 상태로
+멈춘다.
 
 ### 구현 범위
 
-* `AgentState` (평범한 struct: 메시지 / step / status)
+* `AgentState` (평범한 struct: 메시지 / step / status / final answer / tool calls / last error / trace)
 * `Agent`
-* agent loop (LLM 호출 → 응답 해석 → 반복)
+* Agent run 실행 API
+* LLM 호출 → 응답 해석 → final 또는 tool 대기 종료
 * step counter
 * final answer detection
 * max steps
 * error state
-* trace 구조 도입 (step/action을 담는 단일 trace struct; 이후 Phase는 같은 구조에 필드만 더한다)
+* trace 구조 도입 (step/action/status/error를 담는 단일 trace struct; 이후 Phase는 같은 구조에 필드만 더한다)
 
 ### 주요 패키지
 
@@ -145,14 +148,16 @@ internal/message
 * Agent는 LLM 호출 한 번으로 끝나지 않는다.
 * LLM 응답을 보고 다음 행동을 Runtime이 해석해야 한다.
 * 무한 루프 방지를 위한 max step이 필요하다.
-* 이 반복 판단 구조는 평범한 Go `for` 루프로 충분히 표현된다.
+* Tool 실행이 붙기 전에도 final, tool 대기, max step, error 같은 종료 상태를 먼저 분리해야 한다.
 
 ### 완료 기준
 
 * 사용자 입력이 `AgentState`에 저장된다.
 * LLM 응답이 state에 누적된다.
-* step 기반 반복 실행이 가능하다.
+* tool call 응답은 Tool 실행 없이 `needs_action` 상태로 멈춘다.
 * max step 초과 시 안전하게 종료된다.
+* LLM 호출 오류는 `error` 상태와 `LastError`로 확인할 수 있다.
+* 각 run의 주요 action과 종료 이유를 `AgentState.Trace`에서 확인할 수 있다.
 
 ---
 
@@ -623,7 +628,7 @@ User Request
 ```text
 00. Project Foundation                         [x]
 01. LLM Client (Claude + Ollama)               [x]
-02. Agent Loop                                  [ ]
+02. Agent Loop                                  [x]
 03. Tool Calling Runtime                        [ ]
 04. Single Agent Runtime                        [ ]
     04.1 Tool 묶음

@@ -96,9 +96,9 @@ Final 통합
 
 ## 프로젝트 구조
 
-아래는 목표 구조입니다. Phase 1 기준으로 `cmd/agent-runtime`, `internal/config`, `internal/llm`,
-`internal/message`, `.env.example`, `.gitignore`, `README.md`, `ROADMAP.md`가 존재하며, 나머지 Runtime 패키지는
-이후 Phase에서 차례로 만들어집니다.
+아래는 목표 구조입니다. Phase 2 기준으로 `cmd/agent-runtime`, `internal/config`, `internal/llm`,
+`internal/message`, `internal/agent`, `.env.example`, `.gitignore`, `README.md`, `ROADMAP.md`가 존재하며, 나머지
+Runtime 패키지는 이후 Phase에서 차례로 만들어집니다.
 
 ```text
 agent-runtime/
@@ -109,7 +109,7 @@ agent-runtime/
 │   ├── config/
 │   ├── llm/
 │   ├── message/
-│   ├── agent/               (예정)
+│   ├── agent/
 │   ├── tool/                (예정)
 │   ├── rag/                 (예정)
 │   ├── memory/              (예정)
@@ -204,13 +204,16 @@ Single Agent 실행 구조를 담당합니다.
 
 주요 책임:
 
-* Agent loop (LLM 호출 → tool 실행 → 반복)
+* 사용자 입력 기반 Agent run 실행
+* 메시지 상태 누적
 * Final answer 감지
-* Agent 상태 전이
-* Tool call 결정 처리
-* Middleware hook (pre / post model)
-* Structured output
-* Streaming runner
+* Tool call 대기 상태 처리
+* max step 기반 종료
+* LLM 오류 상태 보존
+* 메모리 trace 기록
+
+Phase 2에서는 Tool을 실행하지 않고, assistant 응답에 tool call이 있으면 `needs_action` 상태로 멈춘다.
+Tool 실행, middleware hook, structured output, streaming runner는 이후 Phase에서 확장한다.
 
 ### `internal/tool`
 
