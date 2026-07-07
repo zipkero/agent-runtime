@@ -14,7 +14,7 @@
       변환을 확인하고, `go test ./...`가 통과한다.
   - 참조: SPEC §5.3, SPEC §5.11, ANALYSIS §1, ANALYSIS §3, ANALYSIS §4, ANALYSIS §5.1
 
-- [ ] task-002: Tool contract와 registry
+- [x] task-002: Tool contract와 registry
   - 목적: 호출자가 Runtime 내부 Tool을 등록하고 이름으로 조회하며, 중복 등록과 unknown tool을 명확히 구분할 수
     있다.
   - 접근: 새 `internal/tool` 패키지에 `Tool`, `Result`, `Registry`를 추가한다. Tool은 name, description, schema,
