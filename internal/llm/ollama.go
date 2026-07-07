@@ -30,6 +30,18 @@ type ollamaChatRequest struct {
 	Model    string                 `json:"model"`
 	Messages []ollamaRequestMessage `json:"messages"`
 	Stream   bool                   `json:"stream"`
+	Tools    []ollamaTool           `json:"tools,omitempty"`
+}
+
+type ollamaTool struct {
+	Type     string               `json:"type"`
+	Function ollamaToolDefinition `json:"function"`
+}
+
+type ollamaToolDefinition struct {
+	Name        string          `json:"name"`
+	Description string          `json:"description,omitempty"`
+	Parameters  json.RawMessage `json:"parameters,omitempty"`
 }
 
 type ollamaRequestMessage struct {
@@ -160,7 +172,31 @@ func (c *ollamaClient) buildRequest(req ChatRequest) (ollamaChatRequest, error) 
 		Model:    model,
 		Messages: messages,
 		Stream:   false,
+		Tools:    ollamaTools(req.Tools),
 	}, nil
+}
+
+func ollamaTools(schemas []message.ToolSchema) []ollamaTool {
+	if len(schemas) == 0 {
+		return nil
+	}
+
+	tools := make([]ollamaTool, 0, len(schemas))
+	for _, schema := range schemas {
+		parameters := schema.InputSchema
+		if len(parameters) == 0 {
+			parameters = json.RawMessage(`{}`)
+		}
+		tools = append(tools, ollamaTool{
+			Type: "function",
+			Function: ollamaToolDefinition{
+				Name:        schema.Name,
+				Description: schema.Description,
+				Parameters:  parameters,
+			},
+		})
+	}
+	return tools
 }
 
 func ollamaToolCalls(calls []message.ToolCall) []ollamaToolCall {

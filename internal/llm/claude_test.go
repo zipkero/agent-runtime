@@ -49,6 +49,15 @@ func TestClaudeClientSendsMessagesHeadersAndDecodesResponse(t *testing.T) {
 		if len(req.Messages) != 2 {
 			t.Fatalf("len(Messages) = %d, want 2", len(req.Messages))
 		}
+		if len(req.Tools) != 1 {
+			t.Fatalf("len(Tools) = %d, want 1", len(req.Tools))
+		}
+		if req.Tools[0].Name != "search" || req.Tools[0].Description != "Search documents" {
+			t.Fatalf("tool = %+v, want search schema", req.Tools[0])
+		}
+		if string(req.Tools[0].InputSchema) != `{"type":"object","properties":{"query":{"type":"string"}},"required":["query"]}` {
+			t.Fatalf("tool input_schema = %s, want query schema", req.Tools[0].InputSchema)
+		}
 		if req.Messages[0].Role != "user" || req.Messages[0].Content[0].Text != "hello" {
 			t.Fatalf("first message = %+v, want user text", req.Messages[0])
 		}
@@ -85,6 +94,13 @@ func TestClaudeClientSendsMessagesHeadersAndDecodesResponse(t *testing.T) {
 	}
 
 	resp, err := client.Chat(context.Background(), ChatRequest{
+		Tools: []message.ToolSchema{
+			{
+				Name:        "search",
+				Description: "Search documents",
+				InputSchema: json.RawMessage(`{"type":"object","properties":{"query":{"type":"string"}},"required":["query"]}`),
+			},
+		},
 		Messages: []message.Message{
 			message.System("runtime rule"),
 			message.User("hello"),

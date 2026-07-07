@@ -15,6 +15,7 @@ type LLMClient interface {
 type ChatRequest struct {
 	Model    string
 	Messages []message.Message
+	Tools    []message.ToolSchema
 }
 
 // ChatResponse 는 provider 응답을 Runtime 내부 메시지 형태로 정규화한 결과다.

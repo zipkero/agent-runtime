@@ -73,3 +73,20 @@ func TestToolMessagePreservesToolResult(t *testing.T) {
 		t.Fatalf("ToolResult = %+v, want content and error flag preserved", msg.ToolResult)
 	}
 }
+
+// TestToolSchemaPreservesProviderNeutralContract 는 LLM 요청 경계에 전달할 tool schema 정보를 보존하는지 확인한다.
+func TestToolSchemaPreservesProviderNeutralContract(t *testing.T) {
+	inputSchema := json.RawMessage(`{"type":"object","properties":{"query":{"type":"string"}},"required":["query"]}`)
+	schema := ToolSchema{
+		Name:        "search",
+		Description: "Search documents",
+		InputSchema: inputSchema,
+	}
+
+	if schema.Name != "search" || schema.Description != "Search documents" {
+		t.Fatalf("ToolSchema = %+v, want name and description preserved", schema)
+	}
+	if string(schema.InputSchema) != string(inputSchema) {
+		t.Fatalf("InputSchema = %s, want %s", schema.InputSchema, inputSchema)
+	}
+}

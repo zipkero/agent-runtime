@@ -38,6 +38,18 @@ func TestOllamaClientSendsChatRequestAndDecodesResponse(t *testing.T) {
 		if len(req.Messages) != 4 {
 			t.Fatalf("len(Messages) = %d, want 4", len(req.Messages))
 		}
+		if len(req.Tools) != 1 {
+			t.Fatalf("len(Tools) = %d, want 1", len(req.Tools))
+		}
+		if req.Tools[0].Type != "function" {
+			t.Fatalf("tool type = %q, want function", req.Tools[0].Type)
+		}
+		if req.Tools[0].Function.Name != "search" || req.Tools[0].Function.Description != "Search documents" {
+			t.Fatalf("tool function = %+v, want search schema", req.Tools[0].Function)
+		}
+		if string(req.Tools[0].Function.Parameters) != `{"type":"object","properties":{"query":{"type":"string"}},"required":["query"]}` {
+			t.Fatalf("tool parameters = %s, want query schema", req.Tools[0].Function.Parameters)
+		}
 		if req.Messages[0].Role != "system" || req.Messages[0].Content != "runtime rule" {
 			t.Fatalf("system message = %+v, want system text", req.Messages[0])
 		}
@@ -82,6 +94,13 @@ func TestOllamaClientSendsChatRequestAndDecodesResponse(t *testing.T) {
 	}
 
 	resp, err := client.Chat(context.Background(), ChatRequest{
+		Tools: []message.ToolSchema{
+			{
+				Name:        "search",
+				Description: "Search documents",
+				InputSchema: json.RawMessage(`{"type":"object","properties":{"query":{"type":"string"}},"required":["query"]}`),
+			},
+		},
 		Messages: []message.Message{
 			message.System("runtime rule"),
 			message.User("hello"),

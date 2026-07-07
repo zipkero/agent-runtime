@@ -36,6 +36,13 @@ type claudeMessageRequest struct {
 	MaxTokens int                    `json:"max_tokens"`
 	System    string                 `json:"system,omitempty"`
 	Messages  []claudeRequestMessage `json:"messages"`
+	Tools     []claudeTool           `json:"tools,omitempty"`
+}
+
+type claudeTool struct {
+	Name        string          `json:"name"`
+	Description string          `json:"description,omitempty"`
+	InputSchema json.RawMessage `json:"input_schema"`
 }
 
 type claudeRequestMessage struct {
@@ -189,7 +196,28 @@ func (c *claudeClient) buildRequest(req ChatRequest) (claudeMessageRequest, erro
 		MaxTokens: claudeDefaultMaxTokens,
 		System:    strings.Join(systemParts, "\n"),
 		Messages:  messages,
+		Tools:     claudeTools(req.Tools),
 	}, nil
+}
+
+func claudeTools(schemas []message.ToolSchema) []claudeTool {
+	if len(schemas) == 0 {
+		return nil
+	}
+
+	tools := make([]claudeTool, 0, len(schemas))
+	for _, schema := range schemas {
+		inputSchema := schema.InputSchema
+		if len(inputSchema) == 0 {
+			inputSchema = json.RawMessage(`{}`)
+		}
+		tools = append(tools, claudeTool{
+			Name:        schema.Name,
+			Description: schema.Description,
+			InputSchema: inputSchema,
+		})
+	}
+	return tools
 }
 
 // claudeContentBlocks 는 Phase 1 범위에서 text, tool_use, tool_result 표현만 provider 형식으로 보존한다.

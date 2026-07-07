@@ -27,6 +27,13 @@ type ToolResult struct {
 	IsError    bool
 }
 
+// ToolSchema 는 LLM 요청 경계에 전달할 provider-neutral tool contract다.
+type ToolSchema struct {
+	Name        string
+	Description string
+	InputSchema json.RawMessage
+}
+
 // Message 는 LLM과 Runtime 사이에서 주고받는 provider-neutral 메시지 표현이다.
 type Message struct {
 	Role       Role

@@ -2,7 +2,7 @@
 
 ## 체크리스트
 
-- [ ] task-001: provider-neutral tool schema 요청 contract
+- [x] task-001: provider-neutral tool schema 요청 contract
   - 목적: Agent가 사용할 수 있는 Tool 목록을 provider와 무관한 schema로 LLM 요청에 포함할 수 있다.
   - 접근: `internal/message`에 `ToolSchema`를 추가하고 `llm.ChatRequest`에 `Tools []message.ToolSchema`를 추가한다.
     Claude와 Ollama provider는 이 schema를 각 provider의 tools wire format으로 변환하되, `LLMClient.Chat` 메서드
