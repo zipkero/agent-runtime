@@ -27,7 +27,7 @@
   - 참조: SPEC §5.1, SPEC §5.2, SPEC §5.3, SPEC §5.11, ANALYSIS §1, ANALYSIS §3, ANALYSIS §4, ANALYSIS §5.1,
     ANALYSIS §5.2
 
-- [ ] task-003: 정상 tool-use Agent loop
+- [x] task-003: 정상 tool-use Agent loop
   - 목적: Agent가 assistant tool call을 실행하고 tool result를 메시지에 누적한 뒤, 같은 상태로 다음 LLM 판단을
     이어가 final answer로 종료할 수 있다.
   - 접근: `agent.Options`에 Tool registry와 Tool timeout을 추가하고, registry가 있으면 `needs_action` 종료 대신
