@@ -33,6 +33,10 @@ const (
 	TraceActionNeedsAction TraceAction = "needs_action"
 	TraceActionMaxSteps    TraceAction = "max_steps"
 	TraceActionLLMError    TraceAction = "llm_error"
+	TraceActionToolCall    TraceAction = "tool_call"
+	TraceActionToolResult  TraceAction = "tool_result"
+	TraceActionToolError   TraceAction = "tool_error"
+	TraceActionToolTimeout TraceAction = "tool_timeout"
 )
 
 const defaultToolTimeout = 30 * time.Second
@@ -68,10 +72,13 @@ type AgentState struct {
 
 // TraceEvent 는 Agent run 중 메모리에 남기는 테스트 가능한 관찰 기록이다.
 type TraceEvent struct {
-	Step   int
-	Action TraceAction
-	Status Status
-	Error  error
+	Step       int
+	Action     TraceAction
+	Status     Status
+	ToolCallID string
+	ToolName   string
+	IsError    bool
+	Error      error
 }
 
 func New(opts Options) (*Agent, error) {
@@ -138,7 +145,7 @@ func (a *Agent) Run(ctx context.Context, input string) AgentState {
 		}
 
 		for _, call := range resp.Message.ToolCalls {
-			state.Messages = append(state.Messages, a.executeToolCall(ctx, call))
+			state.Messages = append(state.Messages, a.executeToolCall(ctx, &state, call))
 		}
 	}
 }
@@ -154,13 +161,18 @@ func (a *Agent) toolSchemas() []message.ToolSchema {
 	return a.tools.Schemas()
 }
 
-func (a *Agent) executeToolCall(ctx context.Context, call message.ToolCall) message.Message {
+func (a *Agent) executeToolCall(ctx context.Context, state *AgentState, call message.ToolCall) message.Message {
+	state.recordTool(TraceActionToolCall, call, false, nil)
+
 	registeredTool, ok := a.tools.Lookup(call.Name)
 	if !ok {
-		return toolErrorMessage(call, fmt.Sprintf("tool %q is not registered", call.Name))
+		err := fmt.Errorf("tool %q is not registered", call.Name)
+		state.recordTool(TraceActionToolError, call, true, err)
+		return toolErrorMessage(call, err.Error())
 	}
 
 	if err := registeredTool.Validate(call.Arguments); err != nil {
+		state.recordTool(TraceActionToolError, call, true, err)
 		return toolErrorMessage(call, err.Error())
 	}
 
@@ -171,16 +183,43 @@ func (a *Agent) executeToolCall(ctx context.Context, call message.ToolCall) mess
 	}
 	defer cancel()
 
-	result, err := registeredTool.Execute(toolCtx, call.Arguments)
-	if err != nil {
+	resultCh := make(chan toolExecutionResult, 1)
+	go func() {
+		result, err := registeredTool.Execute(toolCtx, call.Arguments)
+		resultCh <- toolExecutionResult{result: result, err: err}
+	}()
+
+	select {
+	case execution := <-resultCh:
+		if execution.err != nil {
+			if errors.Is(execution.err, context.DeadlineExceeded) || errors.Is(toolCtx.Err(), context.DeadlineExceeded) {
+				state.recordTool(TraceActionToolTimeout, call, true, execution.err)
+			} else {
+				state.recordTool(TraceActionToolError, call, true, execution.err)
+			}
+			return toolErrorMessage(call, execution.err.Error())
+		}
+
+		state.recordTool(TraceActionToolResult, call, false, nil)
+		return message.Tool(message.ToolResult{
+			ToolCallID: call.ID,
+			Name:       call.Name,
+			Content:    execution.result.Content,
+		})
+	case <-toolCtx.Done():
+		err := toolCtx.Err()
+		if errors.Is(err, context.DeadlineExceeded) {
+			state.recordTool(TraceActionToolTimeout, call, true, err)
+		} else {
+			state.recordTool(TraceActionToolError, call, true, err)
+		}
 		return toolErrorMessage(call, err.Error())
 	}
+}
 
-	return message.Tool(message.ToolResult{
-		ToolCallID: call.ID,
-		Name:       call.Name,
-		Content:    result.Content,
-	})
+type toolExecutionResult struct {
+	result tool.Result
+	err    error
 }
 
 func toolErrorMessage(call message.ToolCall, content string) message.Message {
@@ -198,5 +237,17 @@ func (s *AgentState) record(action TraceAction, err error) {
 		Action: action,
 		Status: s.Status,
 		Error:  err,
+	})
+}
+
+func (s *AgentState) recordTool(action TraceAction, call message.ToolCall, isError bool, err error) {
+	s.Trace = append(s.Trace, TraceEvent{
+		Step:       s.Step,
+		Action:     action,
+		Status:     s.Status,
+		ToolCallID: call.ID,
+		ToolName:   call.Name,
+		IsError:    isError,
+		Error:      err,
 	})
 }

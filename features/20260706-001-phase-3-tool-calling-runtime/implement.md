@@ -41,7 +41,7 @@
   - 참조: SPEC §5.4, SPEC §5.5, SPEC §5.11, ANALYSIS §1, ANALYSIS §2, ANALYSIS §3, ANALYSIS §4, ANALYSIS §5.3,
     ANALYSIS §5.5
 
-- [ ] task-004: tool 오류 result, max step, trace
+- [x] task-004: tool 오류 result, max step, trace
   - 목적: Tool 관련 실패가 Agent process 오류가 아니라 오류 tool result로 누적되고, 반복 제한과 trace에서 실행 흐름을
     확인할 수 있다.
   - 접근: Agent tool 실행 경로에서 unknown tool, validation failure, Tool 실행 error, Tool timeout을

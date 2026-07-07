@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/zipkero/agent-runtime/internal/llm"
 	"github.com/zipkero/agent-runtime/internal/message"
@@ -40,12 +41,16 @@ func (c *stubClient) Chat(_ context.Context, req llm.ChatRequest) (llm.ChatRespo
 }
 
 type stubTool struct {
-	name        string
-	description string
-	schema      message.ToolSchema
-	result      runtimetool.Result
-	args        json.RawMessage
-	calls       int
+	name          string
+	description   string
+	schema        message.ToolSchema
+	result        runtimetool.Result
+	validateErr   error
+	executeErr    error
+	waitForCtx    bool
+	args          json.RawMessage
+	validateCalls int
+	calls         int
 }
 
 func (t *stubTool) Name() string {
@@ -61,20 +66,32 @@ func (t *stubTool) Schema() message.ToolSchema {
 }
 
 func (t *stubTool) Validate(json.RawMessage) error {
-	return nil
+	t.validateCalls++
+	return t.validateErr
 }
 
-func (t *stubTool) Execute(_ context.Context, args json.RawMessage) (runtimetool.Result, error) {
+func (t *stubTool) Execute(ctx context.Context, args json.RawMessage) (runtimetool.Result, error) {
 	t.calls++
 	t.args = append(json.RawMessage(nil), args...)
+	if t.waitForCtx {
+		<-ctx.Done()
+		return runtimetool.Result{}, ctx.Err()
+	}
+	if t.executeErr != nil {
+		return runtimetool.Result{}, t.executeErr
+	}
 	return t.result, nil
 }
 
 type expectedTrace struct {
-	step    int
-	action  TraceAction
-	status  Status
-	wantErr error
+	step        int
+	action      TraceAction
+	status      Status
+	toolCallID  string
+	toolName    string
+	isError     bool
+	wantErr     error
+	wantErrText string
 }
 
 func assertTrace(t *testing.T, got []TraceEvent, want []expectedTrace) {
@@ -86,6 +103,15 @@ func assertTrace(t *testing.T, got []TraceEvent, want []expectedTrace) {
 	for i := range want {
 		if got[i].Step != want[i].step || got[i].Action != want[i].action || got[i].Status != want[i].status {
 			t.Fatalf("Trace[%d] = %+v, want step=%d action=%q status=%q", i, got[i], want[i].step, want[i].action, want[i].status)
+		}
+		if got[i].ToolCallID != want[i].toolCallID || got[i].ToolName != want[i].toolName || got[i].IsError != want[i].isError {
+			t.Fatalf("Trace[%d] tool fields = %+v, want id=%q name=%q isError=%v", i, got[i], want[i].toolCallID, want[i].toolName, want[i].isError)
+		}
+		if want[i].wantErrText != "" {
+			if got[i].Error == nil || got[i].Error.Error() != want[i].wantErrText {
+				t.Fatalf("Trace[%d].Error = %v, want text %q", i, got[i].Error, want[i].wantErrText)
+			}
+			continue
 		}
 		if !errors.Is(got[i].Error, want[i].wantErr) {
 			t.Fatalf("Trace[%d].Error = %v, want %v", i, got[i].Error, want[i].wantErr)
@@ -302,6 +328,262 @@ func TestRunExecutesRegisteredToolAndContinuesToFinal(t *testing.T) {
 	if state.Messages[3].Role != message.RoleAssistant || state.Messages[3].Text != "final answer" {
 		t.Fatalf("state final message = %+v, want assistant final answer", state.Messages[3])
 	}
+	assertTrace(t, state.Trace, []expectedTrace{
+		{step: 0, action: TraceActionUserMessage, status: StatusRunning},
+		{step: 1, action: TraceActionLLMRequest, status: StatusRunning},
+		{step: 1, action: TraceActionLLMResponse, status: StatusRunning},
+		{step: 1, action: TraceActionToolCall, status: StatusRunning, toolCallID: "call-1", toolName: "lookup"},
+		{step: 1, action: TraceActionToolResult, status: StatusRunning, toolCallID: "call-1", toolName: "lookup"},
+		{step: 2, action: TraceActionLLMRequest, status: StatusRunning},
+		{step: 2, action: TraceActionLLMResponse, status: StatusRunning},
+		{step: 2, action: TraceActionFinal, status: StatusFinal},
+	})
+}
+
+// TestRunAppendsToolErrorResultAndContinues 는 Tool 실패가 Agent 오류가 아니라 오류 result로 다음 LLM 판단에 전달되는지 확인한다.
+func TestRunAppendsToolErrorResultAndContinues(t *testing.T) {
+	validationErr := errors.New("invalid arguments")
+	executeErr := errors.New("tool failed")
+
+	tests := []struct {
+		name              string
+		call              message.ToolCall
+		tool              *stubTool
+		wantContent       string
+		wantToolCalls     int
+		wantValidateCalls int
+		wantTraceErr      error
+		wantTraceErrText  string
+	}{
+		{
+			name: "unknown tool",
+			call: message.ToolCall{
+				ID:        "call-unknown",
+				Name:      "missing",
+				Arguments: json.RawMessage(`{"query":"runtime"}`),
+			},
+			tool:             &stubTool{name: "other"},
+			wantContent:      `tool "missing" is not registered`,
+			wantTraceErrText: `tool "missing" is not registered`,
+		},
+		{
+			name: "validation failure",
+			call: message.ToolCall{
+				ID:        "call-invalid",
+				Name:      "lookup",
+				Arguments: json.RawMessage(`{"query":123}`),
+			},
+			tool:              &stubTool{name: "lookup", validateErr: validationErr},
+			wantContent:       validationErr.Error(),
+			wantValidateCalls: 1,
+			wantTraceErr:      validationErr,
+		},
+		{
+			name: "execute error",
+			call: message.ToolCall{
+				ID:        "call-error",
+				Name:      "lookup",
+				Arguments: json.RawMessage(`{"query":"runtime"}`),
+			},
+			tool:              &stubTool{name: "lookup", executeErr: executeErr},
+			wantContent:       executeErr.Error(),
+			wantToolCalls:     1,
+			wantValidateCalls: 1,
+			wantTraceErr:      executeErr,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := &stubClient{
+				responses: []llm.ChatResponse{
+					{Message: message.Assistant("checking", tt.call)},
+					{Message: message.Assistant("final after error")},
+				},
+			}
+			registry := runtimetool.NewRegistry()
+			if err := registry.Register(tt.tool); err != nil {
+				t.Fatalf("Register() error = %v", err)
+			}
+			agent, err := New(Options{
+				Client:   client,
+				Model:    "test-model",
+				MaxSteps: 3,
+				Tools:    registry,
+			})
+			if err != nil {
+				t.Fatalf("New() error = %v", err)
+			}
+
+			state := agent.Run(context.Background(), "use lookup")
+
+			if state.Status != StatusFinal {
+				t.Fatalf("state Status = %q, want %q", state.Status, StatusFinal)
+			}
+			if state.LastError != nil {
+				t.Fatalf("LastError = %v, want nil", state.LastError)
+			}
+			if client.calls != 2 {
+				t.Fatalf("client calls = %d, want 2", client.calls)
+			}
+			if tt.tool.calls != tt.wantToolCalls {
+				t.Fatalf("tool calls = %d, want %d", tt.tool.calls, tt.wantToolCalls)
+			}
+			if tt.tool.validateCalls != tt.wantValidateCalls {
+				t.Fatalf("validate calls = %d, want %d", tt.tool.validateCalls, tt.wantValidateCalls)
+			}
+			if len(client.requests[1].Messages) != 3 {
+				t.Fatalf("second request len(Messages) = %d, want 3", len(client.requests[1].Messages))
+			}
+			toolMessage := client.requests[1].Messages[2]
+			if toolMessage.Role != message.RoleTool || toolMessage.ToolResult == nil {
+				t.Fatalf("second request third message = %+v, want tool result", toolMessage)
+			}
+			if toolMessage.ToolResult.ToolCallID != tt.call.ID ||
+				toolMessage.ToolResult.Name != tt.call.Name ||
+				toolMessage.ToolResult.Content != tt.wantContent ||
+				!toolMessage.ToolResult.IsError {
+				t.Fatalf("ToolResult = %+v, want error result for %s", toolMessage.ToolResult, tt.call.Name)
+			}
+			assertTrace(t, state.Trace, []expectedTrace{
+				{step: 0, action: TraceActionUserMessage, status: StatusRunning},
+				{step: 1, action: TraceActionLLMRequest, status: StatusRunning},
+				{step: 1, action: TraceActionLLMResponse, status: StatusRunning},
+				{step: 1, action: TraceActionToolCall, status: StatusRunning, toolCallID: tt.call.ID, toolName: tt.call.Name},
+				{step: 1, action: TraceActionToolError, status: StatusRunning, toolCallID: tt.call.ID, toolName: tt.call.Name, isError: true, wantErr: tt.wantTraceErr, wantErrText: tt.wantTraceErrText},
+				{step: 2, action: TraceActionLLMRequest, status: StatusRunning},
+				{step: 2, action: TraceActionLLMResponse, status: StatusRunning},
+				{step: 2, action: TraceActionFinal, status: StatusFinal},
+			})
+		})
+	}
+}
+
+// TestRunAppendsToolTimeoutResultAndContinues 는 Tool timeout이 오류 result와 timeout trace로 보존되는지 확인한다.
+func TestRunAppendsToolTimeoutResultAndContinues(t *testing.T) {
+	toolCall := message.ToolCall{
+		ID:        "call-timeout",
+		Name:      "slow",
+		Arguments: json.RawMessage(`{"query":"runtime"}`),
+	}
+	client := &stubClient{
+		responses: []llm.ChatResponse{
+			{Message: message.Assistant("checking", toolCall)},
+			{Message: message.Assistant("final after timeout")},
+		},
+	}
+	registry := runtimetool.NewRegistry()
+	slowTool := &stubTool{name: "slow", waitForCtx: true}
+	if err := registry.Register(slowTool); err != nil {
+		t.Fatalf("Register() error = %v", err)
+	}
+	agent, err := New(Options{
+		Client:      client,
+		Model:       "test-model",
+		MaxSteps:    3,
+		Tools:       registry,
+		ToolTimeout: 5 * time.Millisecond,
+	})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	state := agent.Run(context.Background(), "use slow")
+
+	if state.Status != StatusFinal {
+		t.Fatalf("state Status = %q, want %q", state.Status, StatusFinal)
+	}
+	if client.calls != 2 {
+		t.Fatalf("client calls = %d, want 2", client.calls)
+	}
+	if slowTool.calls != 1 {
+		t.Fatalf("tool calls = %d, want 1", slowTool.calls)
+	}
+	toolMessage := client.requests[1].Messages[2]
+	if toolMessage.Role != message.RoleTool || toolMessage.ToolResult == nil {
+		t.Fatalf("second request third message = %+v, want tool result", toolMessage)
+	}
+	if toolMessage.ToolResult.ToolCallID != "call-timeout" ||
+		toolMessage.ToolResult.Name != "slow" ||
+		toolMessage.ToolResult.Content != context.DeadlineExceeded.Error() ||
+		!toolMessage.ToolResult.IsError {
+		t.Fatalf("ToolResult = %+v, want timeout error result", toolMessage.ToolResult)
+	}
+	assertTrace(t, state.Trace, []expectedTrace{
+		{step: 0, action: TraceActionUserMessage, status: StatusRunning},
+		{step: 1, action: TraceActionLLMRequest, status: StatusRunning},
+		{step: 1, action: TraceActionLLMResponse, status: StatusRunning},
+		{step: 1, action: TraceActionToolCall, status: StatusRunning, toolCallID: "call-timeout", toolName: "slow"},
+		{step: 1, action: TraceActionToolTimeout, status: StatusRunning, toolCallID: "call-timeout", toolName: "slow", isError: true, wantErr: context.DeadlineExceeded},
+		{step: 2, action: TraceActionLLMRequest, status: StatusRunning},
+		{step: 2, action: TraceActionLLMResponse, status: StatusRunning},
+		{step: 2, action: TraceActionFinal, status: StatusFinal},
+	})
+}
+
+// TestRunStopsAfterToolResultWhenMaxStepsReached 는 tool result 뒤 max step에 도달하면 다음 LLM 요청 없이 종료하는지 확인한다.
+func TestRunStopsAfterToolResultWhenMaxStepsReached(t *testing.T) {
+	toolCall := message.ToolCall{
+		ID:        "call-1",
+		Name:      "lookup",
+		Arguments: json.RawMessage(`{"query":"runtime"}`),
+	}
+	client := &stubClient{
+		responses: []llm.ChatResponse{
+			{Message: message.Assistant("checking", toolCall)},
+			{Message: message.Assistant("should not be used")},
+		},
+	}
+	registry := runtimetool.NewRegistry()
+	lookupTool := &stubTool{name: "lookup", result: runtimetool.Result{Content: "tool output"}}
+	if err := registry.Register(lookupTool); err != nil {
+		t.Fatalf("Register() error = %v", err)
+	}
+	agent, err := New(Options{
+		Client:   client,
+		Model:    "test-model",
+		MaxSteps: 1,
+		Tools:    registry,
+	})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	state := agent.Run(context.Background(), "use lookup")
+
+	if state.Status != StatusMaxSteps {
+		t.Fatalf("state Status = %q, want %q", state.Status, StatusMaxSteps)
+	}
+	if state.FinalAnswer != "" {
+		t.Fatalf("FinalAnswer = %q, want empty", state.FinalAnswer)
+	}
+	if state.LastError != nil {
+		t.Fatalf("LastError = %v, want nil", state.LastError)
+	}
+	if state.Step != 1 {
+		t.Fatalf("Step = %d, want 1", state.Step)
+	}
+	if client.calls != 1 {
+		t.Fatalf("client calls = %d, want 1", client.calls)
+	}
+	if lookupTool.calls != 1 {
+		t.Fatalf("tool calls = %d, want 1", lookupTool.calls)
+	}
+	if len(state.Messages) != 3 {
+		t.Fatalf("len(state Messages) = %d, want user, assistant, tool", len(state.Messages))
+	}
+	toolMessage := state.Messages[2]
+	if toolMessage.Role != message.RoleTool || toolMessage.ToolResult == nil || toolMessage.ToolResult.IsError {
+		t.Fatalf("state Messages[2] = %+v, want successful tool result", toolMessage)
+	}
+	assertTrace(t, state.Trace, []expectedTrace{
+		{step: 0, action: TraceActionUserMessage, status: StatusRunning},
+		{step: 1, action: TraceActionLLMRequest, status: StatusRunning},
+		{step: 1, action: TraceActionLLMResponse, status: StatusRunning},
+		{step: 1, action: TraceActionToolCall, status: StatusRunning, toolCallID: "call-1", toolName: "lookup"},
+		{step: 1, action: TraceActionToolResult, status: StatusRunning, toolCallID: "call-1", toolName: "lookup"},
+		{step: 1, action: TraceActionMaxSteps, status: StatusMaxSteps},
+	})
 }
 
 // TestRunStopsBeforeLLMWhenMaxStepsReached 는 max step 초과 시 provider 호출이 없는지 확인한다.
