@@ -96,9 +96,9 @@ Final 통합
 
 ## 프로젝트 구조
 
-아래는 목표 구조입니다. Phase 2 기준으로 `cmd/agent-runtime`, `internal/config`, `internal/llm`,
-`internal/message`, `internal/agent`, `.env.example`, `.gitignore`, `README.md`, `ROADMAP.md`가 존재하며, 나머지
-Runtime 패키지는 이후 Phase에서 차례로 만들어집니다.
+아래는 목표 구조입니다. Phase 3 기준으로 `cmd/agent-runtime`, `internal/config`, `internal/llm`,
+`internal/message`, `internal/agent`, `internal/tool`, `.env.example`, `.gitignore`, `README.md`, `ROADMAP.md`가
+존재하며, 나머지 Runtime 패키지는 이후 Phase에서 차례로 만들어집니다.
 
 ```text
 agent-runtime/
@@ -110,7 +110,7 @@ agent-runtime/
 │   ├── llm/
 │   ├── message/
 │   ├── agent/
-│   ├── tool/                (예정)
+│   ├── tool/
 │   ├── rag/                 (예정)
 │   ├── memory/              (예정)
 │   ├── multiagent/          (예정)
@@ -212,8 +212,9 @@ Single Agent 실행 구조를 담당합니다.
 * LLM 오류 상태 보존
 * 메모리 trace 기록
 
-Phase 2에서는 Tool을 실행하지 않고, assistant 응답에 tool call이 있으면 `needs_action` 상태로 멈춘다.
-Tool 실행, middleware hook, structured output, streaming runner는 이후 Phase에서 확장한다.
+Phase 3에서는 등록된 Tool registry가 있으면 assistant 응답의 tool call을 실행하고, tool result를 메시지에
+누적한 뒤 다음 LLM 판단을 이어간다. registry가 없으면 기존처럼 `needs_action` 상태로 멈춘다.
+Middleware hook, structured output, streaming runner는 이후 Phase에서 확장한다.
 
 ### `internal/tool`
 
@@ -228,7 +229,8 @@ Tool Calling Runtime을 담당합니다.
 * Tool execution
 * Tool timeout
 * Tool result normalization
-* 기본 Tool (calculator / file read / file save / web search / code execution)
+* 기본 Tool (calculator / file read)
+* 이후 Phase의 확장 Tool (file save / web search / code execution)
 
 ### `internal/rag`
 

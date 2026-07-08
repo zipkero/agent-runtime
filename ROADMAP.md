@@ -26,7 +26,7 @@ Runtime 본체는 직접 만들고, 외부 연결(LLM·임베딩·웹 검색·�
 [x] Phase 0  Project Foundation
 [x] Phase 1  LLM Client          (Claude + Ollama 로컬 provider)
 [x] Phase 2  Agent Loop
-[ ] Phase 3  Tool Calling Runtime
+[x] Phase 3  Tool Calling Runtime
 [ ] Phase 4  Single Agent Runtime (4.1 Tool 묶음 / 4.2 실행 구조 / 4.3 Streaming)
 [ ] Phase 5  RAG Runtime          (5.1 인덱싱 / 5.2 검색·활용)
 [ ] Phase 6  Memory Runtime       (6.1 단기 메모리 / 6.2 장기 메모리 & Tool)
@@ -161,7 +161,7 @@ internal/message
 
 ---
 
-## Phase 3. Tool Calling Runtime — 예정
+## Phase 3. Tool Calling Runtime — 완료
 
 ### 목표
 
@@ -179,6 +179,7 @@ LLM이 선택한 Tool을 Runtime이 안전하게 실행하는 구조를 만든�
 * tool error handling
 * basic calculator tool
 * basic file read tool
+* Phase 3 문서 상태 갱신
 * trace에 tool call / tool result 기록
 
 ### 주요 패키지
@@ -201,6 +202,7 @@ internal/agent
 * 이름 기반 Tool lookup 가능
 * Agent가 Tool Call을 실행 가능
 * Tool 결과를 다시 LLM 입력에 포함 가능
+* 기본 calculator Tool과 file read Tool 사용 가능
 
 ---
 
@@ -629,7 +631,7 @@ User Request
 00. Project Foundation                         [x]
 01. LLM Client (Claude + Ollama)               [x]
 02. Agent Loop                                  [x]
-03. Tool Calling Runtime                        [ ]
+03. Tool Calling Runtime                        [x]
 04. Single Agent Runtime                        [ ]
     04.1 Tool 묶음
     04.2 Agent 실행 구조
