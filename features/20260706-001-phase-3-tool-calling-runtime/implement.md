@@ -56,7 +56,7 @@
   - 참조: SPEC §5.6, SPEC §5.7, SPEC §5.8, SPEC §5.11, ANALYSIS §1, ANALYSIS §2, ANALYSIS §3, ANALYSIS §4,
     ANALYSIS §5.3, ANALYSIS §5.4, ANALYSIS §5.5, ANALYSIS §5.7
 
-- [ ] task-005: calculator Tool
+- [x] task-005: calculator Tool
   - 목적: 기본 calculator Tool이 명확한 숫자 입력과 연산자로 계산 결과를 반환하고, 잘못된 입력은 오류 result로
     전달될 수 있다.
   - 접근: `internal/tool`에 calculator Tool을 추가한다. 입력은 `{"left": number, "operator": string, "right": number}`
@@ -67,7 +67,7 @@
     - 확인: `internal/tool` calculator 테스트에서 정상 계산과 오류 입력을 확인하고, `go test ./...`가 통과한다.
   - 참조: SPEC §5.9, SPEC §5.11, ANALYSIS §1, ANALYSIS §3, ANALYSIS §4, ANALYSIS §5.2
 
-- [ ] task-006: file read Tool
+- [x] task-006: file read Tool
   - 목적: 기본 file read Tool이 허용된 root 안의 로컬 파일을 읽고, 허용되지 않은 접근이나 읽기 실패를 오류 result로
     전달할 수 있다.
   - 접근: `internal/tool`에 root directory를 주입받는 file read Tool을 추가한다. 입력은 `{"path": string}`으로

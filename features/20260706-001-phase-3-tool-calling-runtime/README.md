@@ -8,7 +8,7 @@ LLM이 요청한 tool call을 Runtime이 이름으로 찾아 검증하고 실행
 ## 상태
 - [x] SPEC
 - [x] ANALYSIS
-- [ ] IMPLEMENT
+- [x] IMPLEMENT
 
 ## 문서
 - [spec.md](./spec.md)
@@ -19,3 +19,4 @@ LLM이 요청한 tool call을 Runtime이 이름으로 찾아 검증하고 실행
 - 2026-07-06: SPEC 작성
 - 2026-07-06: ANALYSIS 작성
 - 2026-07-06: IMPLEMENT 체크리스트 작성
+- 2026-07-08: IMPLEMENT 완료
