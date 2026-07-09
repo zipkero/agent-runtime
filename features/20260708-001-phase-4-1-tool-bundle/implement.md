@@ -2,7 +2,7 @@
 
 ## 체크리스트
 
-- [ ] task-001: Tavily Web Search Tool
+- [x] task-001: Tavily Web Search Tool
   - 목적: Web Search Tool이 유효한 검색 입력으로 Tavily 검색 결과를 Tool result content로 반환하고, 설정/입력/provider
     실패는 Tool 오류로 구분한다.
   - 접근: `internal/tool`에 Web Search Tool과 Tavily client 경계를 추가한다. Tool은 기존 `Tool` interface와
