@@ -16,7 +16,7 @@
   - 참조: SPEC §5.1, SPEC §5.2, SPEC §5.7, SPEC §5.9, ANALYSIS §1, ANALYSIS §2, ANALYSIS §3, ANALYSIS §4,
     ANALYSIS §5.1, ANALYSIS §5.2
 
-- [ ] task-002: File Save Tool
+- [x] task-002: File Save Tool
   - 목적: File Save Tool이 허용된 root 안에 content를 저장하고, root 밖 접근이나 저장 실패를 Tool 오류로 반환한다.
   - 접근: `internal/tool`에 root directory를 주입받는 File Save Tool을 추가한다. Phase 3 `FileRead`와 같은 root 제한
     모델을 사용하고, 입력은 `{"path": string, "content": string, "overwrite": bool}`로 검증한다. parent directory는
