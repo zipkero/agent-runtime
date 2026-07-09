@@ -29,7 +29,7 @@
   - 참조: SPEC §5.3, SPEC §5.4, SPEC §5.7, SPEC §5.9, ANALYSIS §1, ANALYSIS §2, ANALYSIS §3, ANALYSIS §4,
     ANALYSIS §5.3, ANALYSIS §5.4
 
-- [ ] task-003: Go Code Execution Tool
+- [x] task-003: Go Code Execution Tool
   - 목적: Code Execution Tool이 root 내부에서 허용된 `go` 명령을 실행하고 stdout, stderr, exit code를 Tool result로
     반환한다.
   - 접근: `internal/tool`에 root directory와 output limit을 주입받는 Code Execution Tool을 추가한다. 입력은
