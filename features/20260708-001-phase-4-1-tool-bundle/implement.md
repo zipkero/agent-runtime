@@ -44,7 +44,7 @@
   - 참조: SPEC §5.5, SPEC §5.6, SPEC §5.7, SPEC §5.9, ANALYSIS §1, ANALYSIS §2, ANALYSIS §3, ANALYSIS §4,
     ANALYSIS §5.5, ANALYSIS §5.6
 
-- [ ] task-004: Phase 4.1 Tool registry와 Agent loop 연동
+- [x] task-004: Phase 4.1 Tool registry와 Agent loop 연동
   - 목적: 세 Tool이 기존 registry에 함께 등록되어 Agent LLM 요청 schema에 노출되고, stub LLM tool call을 통해
     실행 결과가 메시지에 누적된다.
   - 접근: `internal/tool` 또는 `internal/agent` 테스트에서 Web Search, File Save, Code Execution Tool을 registry에
