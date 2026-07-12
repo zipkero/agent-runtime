@@ -21,3 +21,4 @@ structured output 검증, provider-neutral Runner와 CLI 실행 경로를 추가
 
 - 2026-07-10: SPEC 작성
 - 2026-07-10: ANALYSIS 작성
+- 2026-07-12: IMPLEMENT 체크리스트 작성
