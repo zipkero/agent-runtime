@@ -2,7 +2,7 @@
 
 ## 체크리스트
 
-- [ ] task-001: Single Agent Runner 실행 경계 추가
+- [x] task-001: Single Agent Runner 실행 경계 추가
   - 목적: 호출자가 provider-neutral 의존성과 실행 제한을 주입한 Runner로 기존 Tool loop를 실행하고, 일반 text 최종
     응답과 Agent 종료 상태를 일관된 결과로 확인할 수 있다.
   - 접근: `RunnerOptions`, `RunnerResult`, `Runner`를 추가하고 Runner가 model 호출별 timeout을 적용하는 client를 조립해 기존
