@@ -17,6 +17,7 @@ type RunnerOptions struct {
 	ModelTimeout time.Duration
 	Tools        *tool.Registry
 	ToolTimeout  time.Duration
+	Middleware   []ModelMiddleware
 }
 
 // RunnerResult 는 Runner가 실행한 Agent의 최종 상태와 결과를 보존한다.
@@ -40,6 +41,13 @@ func NewRunner(opts RunnerOptions) (*Runner, error) {
 		modelClient = &modelTimeoutClient{
 			client:  opts.Client,
 			timeout: opts.ModelTimeout,
+		}
+	}
+	if len(opts.Middleware) > 0 {
+		var err error
+		modelClient, err = newMiddlewareClient(modelClient, opts.Middleware)
+		if err != nil {
+			return nil, err
 		}
 	}
 

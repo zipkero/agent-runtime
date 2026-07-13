@@ -15,7 +15,7 @@
       context cancellation, LLM 오류를 확인하고 `go test ./internal/agent`를 실행한다.
   - 참조: SPEC §5.1, SPEC §5.2, SPEC §5.8, SPEC §5.11, ANALYSIS §1, ANALYSIS §2, ANALYSIS §3
 
-- [ ] task-002: Model middleware 순서·변경·실패 계약 구현
+- [x] task-002: Model middleware 순서·변경·실패 계약 구현
   - 목적: 호출자가 등록한 `pre-model`과 `post-model` middleware가 모든 model 호출을 순서대로 관찰·변경하며, 실패한
     middleware와 실행 중단 지점을 Runner 결과에서 구분할 수 있다.
   - 접근: 이름과 선택적 pre/post hook을 가진 `ModelMiddleware`를 provider-neutral client decorator로 구현한다. 요청의 message,

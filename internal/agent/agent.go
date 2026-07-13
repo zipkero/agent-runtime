@@ -26,17 +26,18 @@ const (
 type TraceAction string
 
 const (
-	TraceActionUserMessage TraceAction = "user_message"
-	TraceActionLLMRequest  TraceAction = "llm_request"
-	TraceActionLLMResponse TraceAction = "llm_response"
-	TraceActionFinal       TraceAction = "final"
-	TraceActionNeedsAction TraceAction = "needs_action"
-	TraceActionMaxSteps    TraceAction = "max_steps"
-	TraceActionLLMError    TraceAction = "llm_error"
-	TraceActionToolCall    TraceAction = "tool_call"
-	TraceActionToolResult  TraceAction = "tool_result"
-	TraceActionToolError   TraceAction = "tool_error"
-	TraceActionToolTimeout TraceAction = "tool_timeout"
+	TraceActionUserMessage     TraceAction = "user_message"
+	TraceActionLLMRequest      TraceAction = "llm_request"
+	TraceActionLLMResponse     TraceAction = "llm_response"
+	TraceActionFinal           TraceAction = "final"
+	TraceActionNeedsAction     TraceAction = "needs_action"
+	TraceActionMaxSteps        TraceAction = "max_steps"
+	TraceActionLLMError        TraceAction = "llm_error"
+	TraceActionMiddlewareError TraceAction = "middleware_error"
+	TraceActionToolCall        TraceAction = "tool_call"
+	TraceActionToolResult      TraceAction = "tool_result"
+	TraceActionToolError       TraceAction = "tool_error"
+	TraceActionToolTimeout     TraceAction = "tool_timeout"
 )
 
 const defaultToolTimeout = 30 * time.Second
@@ -124,7 +125,11 @@ func (a *Agent) Run(ctx context.Context, input string) AgentState {
 		if err != nil {
 			state.Status = StatusError
 			state.LastError = err
-			state.record(TraceActionLLMError, err)
+			if IsRunnerErrorKind(err, RunnerErrorKindMiddleware) {
+				state.record(TraceActionMiddlewareError, err)
+			} else {
+				state.record(TraceActionLLMError, err)
+			}
 			return state
 		}
 
