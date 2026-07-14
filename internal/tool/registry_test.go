@@ -130,6 +130,24 @@ func TestRegistryLookupUnknownDistinguishesMissingTool(t *testing.T) {
 	}
 }
 
+func TestRegistryLen(t *testing.T) {
+	var nilRegistry *Registry
+	if got := nilRegistry.Len(); got != 0 {
+		t.Fatalf("nil Registry Len() = %d, want 0", got)
+	}
+
+	registry := NewRegistry()
+	if got := registry.Len(); got != 0 {
+		t.Fatalf("empty Registry Len() = %d, want 0", got)
+	}
+	if err := registry.Register(testTool{name: "search"}); err != nil {
+		t.Fatalf("Register() error = %v", err)
+	}
+	if got := registry.Len(); got != 1 {
+		t.Fatalf("Registry Len() = %d, want 1", got)
+	}
+}
+
 // TestRegistrySchemasReturnsCopy 는 호출자가 반환된 schema를 바꿔도 registry 내부 schema가 오염되지 않는지 확인한다.
 func TestRegistrySchemasReturnsCopy(t *testing.T) {
 	registry := NewRegistry()

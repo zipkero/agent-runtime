@@ -7,6 +7,7 @@ import (
 )
 
 // LLMClient 는 provider 구현을 Runtime 호출 contract 뒤에 숨긴다.
+// Chat 구현은 req를 읽기 전용으로 사용하고 참조를 보관하지 않으며, 반환한 응답의 소유권은 호출자에게 이전한다.
 type LLMClient interface {
 	Chat(ctx context.Context, req ChatRequest) (ChatResponse, error)
 }

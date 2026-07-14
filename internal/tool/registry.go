@@ -86,6 +86,14 @@ func (r *Registry) Lookup(name string) (Tool, bool) {
 	return tool, ok
 }
 
+// Len 은 현재 등록된 Tool 수를 반환한다.
+func (r *Registry) Len() int {
+	if r == nil {
+		return 0
+	}
+	return len(r.tools)
+}
+
 func (r *Registry) Schemas() []message.ToolSchema {
 	if r == nil || len(r.order) == 0 {
 		return nil
