@@ -18,7 +18,8 @@ Structured output은 호출자가 JSON Schema를 지정한 run에 적용한다. 
 
 Single Agent Runner는 LLM client, model, 실행 제한, Tool registry, middleware, 선택적인 structured output schema를
 주입받아 하나의 사용자 요청을 실행한다. Runner는 기존 Agent loop의 메시지 누적, Tool 실행, max step, timeout,
-context cancellation을 보존하고 최종 실행 상태와 결과를 호출자에게 반환한다.
+context cancellation을 보존하고 최종 실행 상태와 결과를 호출자에게 반환한다. Tool timeout 뒤에는 해당 Tool 실행이
+남지 않아야 하며, Tool 호출 수와 result 크기에도 명시적인 상한을 적용해야 한다.
 
 기존 CLI는 단발 `LLMClient.Chat` 호출 대신 Single Agent Runner를 사용한다. 진입점에서 조립한 Phase 3·4.1 Tool을
 Agent에 제공하고, Tool call이 포함된 요청은 전체 Agent loop를 거쳐 최종 응답을 stdout으로 출력한다. 실행 실패는
@@ -60,7 +61,16 @@ Runner의 LLM client, model, Tool registry, middleware, 실행 제한은 외부�
 system prompt나 고정 Tool 구성을 넣지 않으며, 실제 CLI용 구성은 `cmd/agent-runtime` 진입점에서 조립한다.
 
 CLI는 기존 config의 provider, model, timeout과 Tool별 제한을 따라야 한다. Phase 4.2를 이유로 Code Execution Tool의
-허용 범위나 파일 Tool의 root 제한을 넓히지 않는다.
+허용 범위나 파일 Tool의 root 제한을 넓히지 않는다. File Tool은 symbolic link를 포함한 실제 filesystem 해석에서도
+주입된 root 밖을 읽거나 변경하지 않아야 한다. Code Execution Tool은 기본 비활성화하고 명시적으로 활성화된 경우에만
+등록하며, 자식 프로세스에 process 환경 전체를 전달하지 않는다.
+
+Runner는 provider 응답의 완료 사유를 provider-neutral 값으로 해석한다. 정상 완료와 Tool 호출 완료만 다음 상태 전이에
+사용하며, 길이 제한, 차단, 알 수 없는 완료 사유는 성공 final로 숨기지 않는다. 기존 custom `LLMClient`가 빈 완료 사유를
+반환하는 경우에는 기존 contract 호환을 위해 정상 완료로 해석한다.
+
+CLI의 `LLM_TIMEOUT`은 양수만 허용하고 model 호출별 timeout으로 사용한다. CLI run 전체에는 10분 제한을 적용하며,
+Runner 호출자는 더 짧은 deadline을 가진 context를 전달할 수 있다.
 
 ## 제외 범위
 
@@ -72,6 +82,9 @@ Provider별 native structured output 또는 constrained decoding 연동, structu
 
 Tool 실행 전후 middleware, Agent run 전체를 감싸는 middleware, middleware 동시 실행은 포함하지 않는다. Phase 4.2의
 middleware는 model 요청과 응답 경계에 한정한다.
+
+Code Execution Tool의 production-grade sandbox, host filesystem·network 격리, 프롬프트 인젝션 방어는 포함하지 않는다.
+Phase 4.2의 opt-in과 환경변수 allowlist는 기본 노출과 secret 전달을 줄이는 경계이며 sandbox를 보장하지 않는다.
 
 새 system prompt template, Tool routing 또는 ranking 정책, 대화형 다중 입력 CLI, HTTP API, Agent Server는 포함하지
 않는다.
@@ -102,3 +115,15 @@ RAG, Memory, Multi-Agent, MCP, A2A 구현은 포함하지 않는다.
     있다.
 11. 테스트는 실제 외부 provider 호출 없이 stub LLM client와 테스트 middleware를 사용해 middleware 순서와 변경
     반영, middleware 오류, Tool loop, structured output 성공·실패, CLI 최종 출력을 확인할 수 있다.
+12. Tool timeout이나 caller cancellation으로 Tool 호출이 끝난 뒤에는 해당 `Tool.Execute`가 background에서 계속 실행되지
+    않으며, Agent는 Tool 실행이 반환된 뒤에만 다음 상태로 전이한다.
+13. File Read와 File Save Tool은 symbolic link가 root 밖을 가리키는 경로를 거부하고, 실패한 File Save가 root 밖에
+    디렉터리나 파일을 만드는 부작용을 남기지 않는다.
+14. Agent run은 최대 20회의 Tool 호출, Tool result당 64KiB, caller context의 전체 실행 deadline을 지키며 제한 초과를
+    일반 성공과 구분한다. CLI는 전체 run에 10분 deadline을 적용한다.
+15. Claude와 Ollama 응답의 완료 사유는 provider-neutral 값으로 정규화되며, 길이 제한·차단·알 수 없는 종료는
+    `StatusFinal`이 아닌 명확한 오류 상태로 확인할 수 있다. 빈 완료 사유는 기존 custom client 호환을 위해 정상으로 본다.
+16. CLI는 `ENABLE_CODE_EXECUTION`의 기본값이 false일 때 Code Execution Tool을 등록하지 않는다. true일 때만 등록하며,
+    자식 Go process에는 allowlist 환경변수와 강제된 `GOWORK=off`만 전달한다.
+17. `LLM_TIMEOUT`이 0 이하이면 config 로딩에서 오류가 발생하고, Runner와 Agent의 음수 timeout·실행 제한도 생성 시점에
+    거부되어 같은 설정이 경계에 따라 timeout 비활성화나 즉시 취소로 다르게 해석되지 않는다.
