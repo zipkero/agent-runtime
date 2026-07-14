@@ -6,6 +6,7 @@ import (
 	"errors"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/zipkero/agent-runtime/internal/llm"
 	"github.com/zipkero/agent-runtime/internal/message"
@@ -114,7 +115,44 @@ func TestRunnerAppliesMiddlewareInRegistrationOrderOnEveryModelCall(t *testing.T
 	}
 }
 
-func TestMiddlewareDoesNotAliasAgentOrRegistryNestedValues(t *testing.T) {
+func TestRunnerAppliesModelTimeoutOnlyToProviderCall(t *testing.T) {
+	client := &deadlineStubClient{responses: []llm.ChatResponse{{Message: message.Assistant("answer")}}}
+	middleware := ModelMiddleware{
+		Name: "context-observer",
+		PreModel: func(ctx context.Context, req llm.ChatRequest) (llm.ChatRequest, error) {
+			if _, ok := ctx.Deadline(); ok {
+				t.Fatal("pre-model context has provider deadline")
+			}
+			return req, nil
+		},
+		PostModel: func(ctx context.Context, _ llm.ChatRequest, resp llm.ChatResponse) (llm.ChatResponse, error) {
+			if _, ok := ctx.Deadline(); ok {
+				t.Fatal("post-model context has provider deadline")
+			}
+			return resp, nil
+		},
+	}
+	runner, err := NewRunner(RunnerOptions{
+		Client:       client,
+		MaxSteps:     1,
+		ModelTimeout: 100 * time.Millisecond,
+		Middleware:   []ModelMiddleware{middleware},
+	})
+	if err != nil {
+		t.Fatalf("NewRunner() error = %v", err)
+	}
+
+	result := runner.Run(context.Background(), "hello")
+
+	if result.State.Status != StatusFinal || result.State.FinalAnswer != "answer" {
+		t.Fatalf("State = %+v, want final answer", result.State)
+	}
+	if len(client.deadlines) != 1 {
+		t.Fatalf("len(deadlines) = %d, want provider deadline", len(client.deadlines))
+	}
+}
+
+func TestPreModelChangesDoNotAliasAgentOrRegistryState(t *testing.T) {
 	originalArguments := json.RawMessage(`{"query":"runtime"}`)
 	client := &stubClient{responses: []llm.ChatResponse{
 		{Message: message.Assistant("checking", message.ToolCall{
@@ -184,19 +222,17 @@ func TestMiddlewareDoesNotAliasAgentOrRegistryNestedValues(t *testing.T) {
 	if got := string(registry.Schemas()[0].InputSchema); got != `{"type":"object"}` {
 		t.Fatalf("registry schema = %q, want original", got)
 	}
-	if got := string(originalArguments); got != `{"query":"runtime"}` {
-		t.Fatalf("provider response arguments = %q, want original backing bytes", got)
-	}
 }
 
 func TestRunnerStopsAtMiddlewareError(t *testing.T) {
 	tests := []struct {
-		name           string
-		middleware     func(error, *int) []ModelMiddleware
-		wantStage      MiddlewareStage
-		wantMiddleware string
-		wantCalls      int
-		wantToolCalls  int
+		name            string
+		middleware      func(error, *int) []ModelMiddleware
+		wantStage       MiddlewareStage
+		wantMiddleware  string
+		wantCalls       int
+		wantToolCalls   int
+		wantLLMRequests int
 	}{
 		{
 			name: "pre-model",
@@ -227,9 +263,10 @@ func TestRunnerStopsAtMiddlewareError(t *testing.T) {
 					}},
 				}
 			},
-			wantStage:      MiddlewareStagePostModel,
-			wantMiddleware: "post-failure",
-			wantCalls:      1,
+			wantStage:       MiddlewareStagePostModel,
+			wantMiddleware:  "post-failure",
+			wantCalls:       1,
+			wantLLMRequests: 1,
 		},
 	}
 
@@ -286,6 +323,15 @@ func TestRunnerStopsAtMiddlewareError(t *testing.T) {
 			if len(result.State.Messages) != 1 {
 				t.Fatalf("len(Messages) = %d, want response not accumulated", len(result.State.Messages))
 			}
+			llmRequests := 0
+			for _, event := range result.State.Trace {
+				if event.Action == TraceActionLLMRequest {
+					llmRequests++
+				}
+			}
+			if llmRequests != tt.wantLLMRequests {
+				t.Fatalf("LLM request traces = %d, want %d", llmRequests, tt.wantLLMRequests)
+			}
 			lastTrace := result.State.Trace[len(result.State.Trace)-1]
 			if lastTrace.Action != TraceActionMiddlewareError || !errors.Is(lastTrace.Error, sentinel) {
 				t.Fatalf("last trace = %+v, want middleware error trace", lastTrace)
@@ -295,19 +341,35 @@ func TestRunnerStopsAtMiddlewareError(t *testing.T) {
 }
 
 func TestNewRunnerValidatesMiddleware(t *testing.T) {
+	preModel := func(_ context.Context, req llm.ChatRequest) (llm.ChatRequest, error) {
+		return req, nil
+	}
 	tests := []struct {
 		name       string
-		middleware ModelMiddleware
+		middleware []ModelMiddleware
 	}{
 		{
-			name: "missing name",
-			middleware: ModelMiddleware{
-				PreModel: func(_ context.Context, req llm.ChatRequest) (llm.ChatRequest, error) { return req, nil },
-			},
+			name:       "missing name",
+			middleware: []ModelMiddleware{{PreModel: preModel}},
+		},
+		{
+			name:       "whitespace name",
+			middleware: []ModelMiddleware{{Name: "   ", PreModel: preModel}},
+		},
+		{
+			name:       "surrounding whitespace",
+			middleware: []ModelMiddleware{{Name: " policy ", PreModel: preModel}},
 		},
 		{
 			name:       "missing hooks",
-			middleware: ModelMiddleware{Name: "empty"},
+			middleware: []ModelMiddleware{{Name: "empty"}},
+		},
+		{
+			name: "duplicate name",
+			middleware: []ModelMiddleware{
+				{Name: "policy", PreModel: preModel},
+				{Name: "policy", PreModel: preModel},
+			},
 		},
 	}
 	for _, tt := range tests {
@@ -315,7 +377,7 @@ func TestNewRunnerValidatesMiddleware(t *testing.T) {
 			_, err := NewRunner(RunnerOptions{
 				Client:     &stubClient{},
 				MaxSteps:   1,
-				Middleware: []ModelMiddleware{tt.middleware},
+				Middleware: tt.middleware,
 			})
 			if err == nil {
 				t.Fatal("NewRunner() error = nil, want invalid middleware error")

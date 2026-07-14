@@ -4,9 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/zipkero/agent-runtime/internal/llm"
-	"github.com/zipkero/agent-runtime/internal/message"
 )
 
 // MiddlewareStage 는 model 호출에서 middleware가 실행되는 경계를 식별한다.
@@ -46,8 +46,11 @@ func IsRunnerErrorKind(err error, kind RunnerErrorKind) bool {
 	return errors.As(err, &runnerErr) && runnerErr.Kind == kind
 }
 
+// PreModelHook 은 Agent 상태에서 분리된 현재 요청을 처리한다. 반환한 요청은 소유권이 이전되므로 이후 수정하지 않는다.
 type PreModelHook func(context.Context, llm.ChatRequest) (llm.ChatRequest, error)
 
+// PostModelHook 은 실제 model 요청을 읽기 전용으로 관찰하고 현재 응답을 처리한다.
+// 반환한 응답은 소유권이 이전되므로 이후 수정하지 않는다.
 type PostModelHook func(context.Context, llm.ChatRequest, llm.ChatResponse) (llm.ChatResponse, error)
 
 // ModelMiddleware 는 model 요청과 정규화된 응답을 순차 처리하는 선택적 hook 묶음이다.
@@ -57,60 +60,63 @@ type ModelMiddleware struct {
 	PostModel PostModelHook
 }
 
-type middlewareClient struct {
-	client     llm.LLMClient
-	middleware []ModelMiddleware
-}
-
-func newMiddlewareClient(client llm.LLMClient, middleware []ModelMiddleware) (llm.LLMClient, error) {
+func validateModelMiddleware(middleware []ModelMiddleware) error {
+	names := make(map[string]struct{}, len(middleware))
 	for i, item := range middleware {
-		if item.Name == "" {
-			return nil, fmt.Errorf("agent runner middleware[%d] name is required", i)
+		name := strings.TrimSpace(item.Name)
+		if name == "" {
+			return fmt.Errorf("agent runner middleware[%d] name is required", i)
+		}
+		if name != item.Name {
+			return fmt.Errorf("agent runner middleware[%d] name must not have leading or trailing whitespace", i)
 		}
 		if item.PreModel == nil && item.PostModel == nil {
-			return nil, fmt.Errorf("agent runner middleware %q requires a pre-model or post-model hook", item.Name)
+			return fmt.Errorf("agent runner middleware %q requires a pre-model or post-model hook", item.Name)
 		}
+		if _, exists := names[name]; exists {
+			return fmt.Errorf("agent runner middleware name %q is duplicated", name)
+		}
+		names[name] = struct{}{}
 	}
-
-	return &middlewareClient{
-		client:     client,
-		middleware: append([]ModelMiddleware(nil), middleware...),
-	}, nil
+	return nil
 }
 
-func (c *middlewareClient) Chat(ctx context.Context, req llm.ChatRequest) (llm.ChatResponse, error) {
-	processedRequest := cloneChatRequest(req)
-	for _, item := range c.middleware {
-		if item.PreModel == nil {
+func applyPreModelMiddleware(ctx context.Context, middlewares []ModelMiddleware, request llm.ChatRequest) (llm.ChatRequest, error) {
+	currentRequest := request
+	for _, middleware := range middlewares {
+		if middleware.PreModel == nil {
 			continue
 		}
 
-		next, err := item.PreModel(ctx, cloneChatRequest(processedRequest))
+		updatedRequest, err := middleware.PreModel(ctx, currentRequest)
 		if err != nil {
-			return llm.ChatResponse{}, middlewareError(MiddlewareStagePreModel, item.Name, err)
+			return llm.ChatRequest{}, middlewareError(MiddlewareStagePreModel, middleware.Name, err)
 		}
-		processedRequest = cloneChatRequest(next)
+		currentRequest = updatedRequest
 	}
+	return currentRequest, nil
+}
 
-	response, err := c.client.Chat(ctx, cloneChatRequest(processedRequest))
-	if err != nil {
-		return llm.ChatResponse{}, err
-	}
-
-	processedResponse := cloneChatResponse(response)
-	for _, item := range c.middleware {
-		if item.PostModel == nil {
+func applyPostModelMiddleware(
+	ctx context.Context,
+	middlewares []ModelMiddleware,
+	request llm.ChatRequest,
+	response llm.ChatResponse,
+) (llm.ChatResponse, error) {
+	currentResponse := response
+	for _, middleware := range middlewares {
+		if middleware.PostModel == nil {
 			continue
 		}
 
-		next, err := item.PostModel(ctx, cloneChatRequest(processedRequest), cloneChatResponse(processedResponse))
+		updatedResponse, err := middleware.PostModel(ctx, request, currentResponse)
 		if err != nil {
-			return llm.ChatResponse{}, middlewareError(MiddlewareStagePostModel, item.Name, err)
+			return llm.ChatResponse{}, middlewareError(MiddlewareStagePostModel, middleware.Name, err)
 		}
-		processedResponse = cloneChatResponse(next)
+		currentResponse = updatedResponse
 	}
 
-	return processedResponse, nil
+	return currentResponse, nil
 }
 
 func middlewareError(stage MiddlewareStage, name string, err error) error {
@@ -120,47 +126,4 @@ func middlewareError(stage MiddlewareStage, name string, err error) error {
 		Middleware: name,
 		Err:        err,
 	}
-}
-
-func cloneChatRequest(req llm.ChatRequest) llm.ChatRequest {
-	cloned := req
-	cloned.Messages = cloneMessages(req.Messages)
-	cloned.Tools = make([]message.ToolSchema, len(req.Tools))
-	for i, schema := range req.Tools {
-		cloned.Tools[i] = schema
-		cloned.Tools[i].InputSchema = cloneRawMessage(schema.InputSchema)
-	}
-	return cloned
-}
-
-func cloneChatResponse(response llm.ChatResponse) llm.ChatResponse {
-	cloned := response
-	cloned.Message = cloneMessage(response.Message)
-	return cloned
-}
-
-func cloneMessages(messages []message.Message) []message.Message {
-	cloned := make([]message.Message, len(messages))
-	for i, item := range messages {
-		cloned[i] = cloneMessage(item)
-	}
-	return cloned
-}
-
-func cloneMessage(item message.Message) message.Message {
-	cloned := item
-	cloned.ToolCalls = make([]message.ToolCall, len(item.ToolCalls))
-	for i, call := range item.ToolCalls {
-		cloned.ToolCalls[i] = call
-		cloned.ToolCalls[i].Arguments = cloneRawMessage(call.Arguments)
-	}
-	if item.ToolResult != nil {
-		result := *item.ToolResult
-		cloned.ToolResult = &result
-	}
-	return cloned
-}
-
-func cloneRawMessage(value []byte) []byte {
-	return append([]byte(nil), value...)
 }

@@ -283,6 +283,9 @@ func TestRunExecutesRegisteredToolAndContinuesToFinal(t *testing.T) {
 	if state.FinalAnswer != "final answer" {
 		t.Fatalf("FinalAnswer = %q, want final answer", state.FinalAnswer)
 	}
+	if len(state.ToolCalls) != 0 {
+		t.Fatalf("len(ToolCalls) = %d, want none for final response", len(state.ToolCalls))
+	}
 	if state.Step != 2 {
 		t.Fatalf("Step = %d, want 2", state.Step)
 	}

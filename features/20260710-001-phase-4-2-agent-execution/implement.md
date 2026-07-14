@@ -5,8 +5,8 @@
 - [x] task-001: Single Agent Runner 실행 경계 추가
   - 목적: 호출자가 provider-neutral 의존성과 실행 제한을 주입한 Runner로 기존 Tool loop를 실행하고, 일반 text 최종
     응답과 Agent 종료 상태를 일관된 결과로 확인할 수 있다.
-  - 접근: `RunnerOptions`, `RunnerResult`, `Runner`를 추가하고 Runner가 model 호출별 timeout을 적용하는 client를 조립해 기존
-    `Agent`를 내부 loop 엔진으로 사용한다. 기존 `Agent`, `Options`, `Run` contract와 Tool 실행 흐름은 유지한다.
+  - 접근: `RunnerOptions`, `RunnerResult`, `Runner`를 추가하고 Runner가 model 호출별 timeout을 Agent 실행 옵션으로 전달해 기존
+    `Agent`를 내부 loop 엔진으로 사용한다. Agent는 각 `LLMClient.Chat`에 timeout context를 적용하고 기존 Tool 실행 흐름을 유지한다.
   - 검증 조건:
     - 결과: schema와 middleware가 없는 Runner가 Tool schema를 모든 model 요청에 전달하고, Tool result를 다음 요청에 누적해
       final text를 반환한다. 각 model 호출에는 독립된 timeout이 적용되고 max step, caller cancellation, Agent 오류 상태가
@@ -18,15 +18,16 @@
 - [x] task-002: Model middleware 순서·변경·실패 계약 구현
   - 목적: 호출자가 등록한 `pre-model`과 `post-model` middleware가 모든 model 호출을 순서대로 관찰·변경하며, 실패한
     middleware와 실행 중단 지점을 Runner 결과에서 구분할 수 있다.
-  - 접근: 이름과 선택적 pre/post hook을 가진 `ModelMiddleware`를 provider-neutral client decorator로 구현한다. 요청의 message,
-    Tool schema, Tool call argument 등 중첩 참조값을 복제하고, middleware typed error와 전용 trace action을 기존 Agent 오류
-    처리에 연결한다.
+  - 접근: 이름과 선택적 pre/post hook을 가진 `ModelMiddleware`를 Agent loop의 각 model 호출 전후에 명시적으로 적용한다.
+    Agent는 상태 메시지를 복제하고 registry가 분리해 반환한 Tool schema를 인수해 model 요청을 만든다. Hook 반환값은
+    소유권을 이전해 순서대로 전달하며, 순회와 typed error 생성은 provider-neutral helper로 분리한다.
   - 검증 조건:
     - 결과: Tool loop의 모든 model 호출에서 pre/post hook이 등록 순서대로 실행되고 앞 hook의 변경값이 다음 hook,
       provider와 Agent 판단에 반영된다. pre 실패 시 provider가 호출되지 않고 post 실패 시 응답이 상태에 누적되지
       않으며, 실패 이후 model 또는 Tool 호출이 발생하지 않는다.
-    - 확인: 테스트 middleware와 stub client로 hook 순서, 요청·응답 변경, 중첩값 alias 방지, middleware 이름·stage·원인
-      오류, 오류 이후 호출 중단, middleware trace를 확인하고 `go test ./internal/agent`를 실행한다.
+    - 확인: 테스트 middleware와 stub client로 hook 순서, 요청·응답 변경, Agent 상태와 model 요청의 중첩값 alias 방지,
+      middleware 이름의 공백·중복 검증, 오류 stage·원인과 호출 전후 trace, 오류 이후 실행 중단을 확인하고
+      `go test ./internal/agent`를 실행한다.
   - 참조: SPEC §5.3, SPEC §5.4, SPEC §5.5, SPEC §5.11, ANALYSIS §1, ANALYSIS §2, ANALYSIS §3
 
 - [ ] task-003: JSON Schema structured output 검증 추가

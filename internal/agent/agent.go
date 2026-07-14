@@ -51,13 +51,20 @@ type Options struct {
 	ToolTimeout time.Duration
 }
 
+type modelCallOptions struct {
+	timeout    time.Duration
+	middleware []ModelMiddleware
+}
+
 // Agent 는 메시지 상태를 소유하며 LLM 판단을 진행하는 Runtime 실행 객체다.
 type Agent struct {
-	client      llm.LLMClient
-	model       string
-	maxSteps    int
-	tools       *tool.Registry
-	toolTimeout time.Duration
+	client       llm.LLMClient
+	model        string
+	maxSteps     int
+	modelTimeout time.Duration
+	tools        *tool.Registry
+	toolTimeout  time.Duration
+	middleware   []ModelMiddleware
 }
 
 // AgentState 는 호출자가 run 이후 메시지 누적과 종료 상태를 확인하는 값이다.
@@ -83,8 +90,15 @@ type TraceEvent struct {
 }
 
 func New(opts Options) (*Agent, error) {
+	return newAgent(opts, modelCallOptions{})
+}
+
+func newAgent(opts Options, modelCall modelCallOptions) (*Agent, error) {
 	if opts.Client == nil {
 		return nil, errors.New("agent client is required")
+	}
+	if err := validateModelMiddleware(modelCall.middleware); err != nil {
+		return nil, err
 	}
 	toolTimeout := opts.ToolTimeout
 	if toolTimeout == 0 {
@@ -92,11 +106,13 @@ func New(opts Options) (*Agent, error) {
 	}
 
 	return &Agent{
-		client:      opts.Client,
-		model:       opts.Model,
-		maxSteps:    opts.MaxSteps,
-		tools:       opts.Tools,
-		toolTimeout: toolTimeout,
+		client:       opts.Client,
+		model:        opts.Model,
+		maxSteps:     opts.MaxSteps,
+		modelTimeout: modelCall.timeout,
+		tools:        opts.Tools,
+		toolTimeout:  toolTimeout,
+		middleware:   append([]ModelMiddleware(nil), modelCall.middleware...),
 	}, nil
 }
 
@@ -114,49 +130,66 @@ func (a *Agent) Run(ctx context.Context, input string) AgentState {
 			return state
 		}
 
-		reqMessages := append([]message.Message(nil), state.Messages...)
 		state.Step++
-		state.record(TraceActionLLMRequest, nil)
-		resp, err := a.client.Chat(ctx, llm.ChatRequest{
+		modelRequest, err := applyPreModelMiddleware(ctx, a.middleware, llm.ChatRequest{
 			Model:    a.model,
-			Messages: reqMessages,
+			Messages: cloneMessages(state.Messages),
 			Tools:    a.toolSchemas(),
 		})
 		if err != nil {
 			state.Status = StatusError
 			state.LastError = err
-			if IsRunnerErrorKind(err, RunnerErrorKindMiddleware) {
-				state.record(TraceActionMiddlewareError, err)
-			} else {
-				state.record(TraceActionLLMError, err)
-			}
+			state.record(TraceActionMiddlewareError, err)
+			return state
+		}
+		state.record(TraceActionLLMRequest, nil)
+
+		callCtx := ctx
+		cancel := func() {}
+		if a.modelTimeout > 0 {
+			callCtx, cancel = context.WithTimeout(ctx, a.modelTimeout)
+		}
+		providerResponse, err := a.client.Chat(callCtx, modelRequest)
+		cancel()
+		if err != nil {
+			state.Status = StatusError
+			state.LastError = err
+			state.record(TraceActionLLMError, err)
 			return state
 		}
 
-		state.Messages = append(state.Messages, resp.Message)
+		finalResponse, err := applyPostModelMiddleware(ctx, a.middleware, modelRequest, providerResponse)
+		if err != nil {
+			state.Status = StatusError
+			state.LastError = err
+			state.record(TraceActionMiddlewareError, err)
+			return state
+		}
+
+		state.Messages = append(state.Messages, finalResponse.Message)
+		state.ToolCalls = append([]message.ToolCall(nil), finalResponse.Message.ToolCalls...)
 		state.record(TraceActionLLMResponse, nil)
-		if len(resp.Message.ToolCalls) == 0 {
+		if len(state.ToolCalls) == 0 {
 			state.Status = StatusFinal
-			state.FinalAnswer = resp.Message.Text
+			state.FinalAnswer = finalResponse.Message.Text
 			state.record(TraceActionFinal, nil)
 			return state
 		}
 
-		state.ToolCalls = append([]message.ToolCall(nil), resp.Message.ToolCalls...)
 		if !a.hasTools() {
 			state.Status = StatusNeedsAction
 			state.record(TraceActionNeedsAction, nil)
 			return state
 		}
 
-		for _, call := range resp.Message.ToolCalls {
+		for _, call := range finalResponse.Message.ToolCalls {
 			state.Messages = append(state.Messages, a.executeToolCall(ctx, &state, call))
 		}
 	}
 }
 
 func (a *Agent) hasTools() bool {
-	return len(a.toolSchemas()) > 0
+	return a.tools != nil && a.tools.Len() > 0
 }
 
 func (a *Agent) toolSchemas() []message.ToolSchema {
@@ -164,6 +197,28 @@ func (a *Agent) toolSchemas() []message.ToolSchema {
 		return nil
 	}
 	return a.tools.Schemas()
+}
+
+func cloneMessages(messages []message.Message) []message.Message {
+	cloned := make([]message.Message, len(messages))
+	for i, item := range messages {
+		cloned[i] = cloneMessage(item)
+	}
+	return cloned
+}
+
+func cloneMessage(item message.Message) message.Message {
+	cloned := item
+	cloned.ToolCalls = make([]message.ToolCall, len(item.ToolCalls))
+	for i, call := range item.ToolCalls {
+		cloned.ToolCalls[i] = call
+		cloned.ToolCalls[i].Arguments = append([]byte(nil), call.Arguments...)
+	}
+	if item.ToolResult != nil {
+		result := *item.ToolResult
+		cloned.ToolResult = &result
+	}
+	return cloned
 }
 
 func (a *Agent) executeToolCall(ctx context.Context, state *AgentState, call message.ToolCall) message.Message {

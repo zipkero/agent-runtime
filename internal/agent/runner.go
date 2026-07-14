@@ -36,28 +36,19 @@ func NewRunner(opts RunnerOptions) (*Runner, error) {
 		return nil, errors.New("agent runner client is required")
 	}
 
-	modelClient := llm.LLMClient(opts.Client)
-	if opts.ModelTimeout > 0 {
-		modelClient = &modelTimeoutClient{
-			client:  opts.Client,
-			timeout: opts.ModelTimeout,
-		}
-	}
-	if len(opts.Middleware) > 0 {
-		var err error
-		modelClient, err = newMiddlewareClient(modelClient, opts.Middleware)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	agent, err := New(Options{
-		Client:      modelClient,
-		Model:       opts.Model,
-		MaxSteps:    opts.MaxSteps,
-		Tools:       opts.Tools,
-		ToolTimeout: opts.ToolTimeout,
-	})
+	agent, err := newAgent(
+		Options{
+			Client:      opts.Client,
+			Model:       opts.Model,
+			MaxSteps:    opts.MaxSteps,
+			Tools:       opts.Tools,
+			ToolTimeout: opts.ToolTimeout,
+		},
+		modelCallOptions{
+			timeout:    opts.ModelTimeout,
+			middleware: opts.Middleware,
+		},
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -68,16 +59,4 @@ func NewRunner(opts RunnerOptions) (*Runner, error) {
 // Run 은 사용자 입력 하나를 기존 Agent loop로 실행한다.
 func (r *Runner) Run(ctx context.Context, input string) RunnerResult {
 	return RunnerResult{State: r.agent.Run(ctx, input)}
-}
-
-type modelTimeoutClient struct {
-	client  llm.LLMClient
-	timeout time.Duration
-}
-
-func (c *modelTimeoutClient) Chat(ctx context.Context, req llm.ChatRequest) (llm.ChatResponse, error) {
-	callCtx, cancel := context.WithTimeout(ctx, c.timeout)
-	defer cancel()
-
-	return c.client.Chat(callCtx, req)
 }

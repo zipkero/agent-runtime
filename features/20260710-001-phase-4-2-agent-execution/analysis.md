@@ -38,32 +38,32 @@
 ## 1. 구조
 
 기존 `Agent`는 메시지 상태, step 전이, Tool 실행을 소유하는 loop 엔진으로 유지한다. 새 `Runner`는 호출자가 사용하는
-상위 실행 경계로 두고, Runner 생성 시 model 호출 decorator와 선택적인 structured output validator를 조립한 뒤 기존
-Agent를 내부에서 생성한다. 이렇게 하면 Phase 2·3에서 확정된 `Agent.Run` contract를 깨지 않고 `SPEC §5.1`,
-`SPEC §5.2`, `SPEC §5.8`을 만족할 수 있다.
+상위 실행 경계로 두고, Runner 생성 시 model 호출 옵션을 비공개 Agent 생성 경계로 전달하고 선택적인 structured output
+validator를 조립한 뒤 기존 Agent를 내부에서 생성한다. 이렇게 하면 Phase 2·3에서 확정된 `Agent.Run` contract를 깨지
+않고 `SPEC §5.1`, `SPEC §5.2`, `SPEC §5.8`을 만족할 수 있다.
 
 ```text
 Caller / CLI
 → Runner
-  → middleware client
+  → Agent loop
     → pre-model hooks
-    → per-model timeout
+    → per-model timeout context
     → LLMClient
     → post-model hooks
-  → Agent loop
     → Tool registry / Tool execution
   → optional structured output validator
 → RunnerResult
 ```
 
 Runner는 `RunnerOptions`로 client, model, max step, model timeout, Tool registry, Tool timeout, middleware 목록,
-선택적인 output schema를 받는다. Runner 내부의 Agent에는 middleware가 감싼 client를 주입한다. Agent가 model을 호출할
-때마다 같은 decorator를 통과하므로 Tool loop의 두 번째 이후 호출에도 middleware가 빠지지 않는다
-(`SPEC §5.2`~`SPEC §5.5`).
+선택적인 output schema를 받는다. Runner는 model timeout과 middleware 목록을 Agent 실행 옵션으로 전달하고, Agent loop는
+각 model 요청마다 `pre-model`, timeout이 적용된 `LLMClient.Chat`, `post-model`을 명시적인 순서로 호출한다. Tool loop의
+두 번째 이후 호출도 같은 loop 본문을 다시 지나므로 middleware가 빠지지 않는다(`SPEC §5.2`~`SPEC §5.5`).
 
-Middleware 경계는 `internal/agent` 안의 provider-neutral client decorator로 둔다. `internal/llm`은 provider 호출
-contract만 계속 소유하고, middleware 등록·순서·오류 분류는 Single Agent 실행 책임이므로 `internal/agent`가
-소유한다. Provider 구현이나 `llm.ChatRequest`에 middleware 필드를 추가하지 않는다.
+Middleware의 순회와 typed error 생성은 `internal/agent/middleware.go`의 provider-neutral helper가 소유하고, Agent loop는
+요청 상태 분리, 적용 시점과 실패 상태 전이를 소유한다. `internal/llm`은 provider 호출 contract만 계속 소유하며 Provider
+구현이나 `llm.ChatRequest`에는 middleware 필드를 추가하지 않는다. 이 경계는 실제 provider client를 middleware 실행
+객체처럼 포장하지 않으면서 model 호출 전후 흐름을 코드에 드러낸다.
 
 Structured output validator도 `internal/agent`의 Runner 내부 구성요소로 둔다. Runner 생성 시 schema를 한 번 compile해
 재사용하고, final assistant text만 instance로 파싱·검증한다. 외부 library 타입은 공개 Runner API에 노출하지 않고
@@ -85,19 +85,20 @@ Phase 4.2 schema는 self-contained 문서로 제한한다. 같은 문서 안의 
 HTTP(S)에서 외부 schema를 불러오지 않는다. Runner 생성이 호출자 제공 schema 때문에 예기치 않은 filesystem 또는
 network I/O를 수행하지 않게 하는 경계이며, `SPEC §5.6`, `SPEC §5.7`의 구조 검증에는 외부 resource가 필요하지 않다.
 
-Run은 기존 Agent처럼 user message를 상태에 넣고 step을 시작한다. Agent가 만든 `llm.ChatRequest`는 registry schema와
-누적 메시지를 가진 채 middleware client로 전달된다. 각 `pre-model` hook은 앞 hook이 반환한 요청을 받아 등록 순서대로
-변경하고, 최종 요청이 provider에 전달된다. Hook이 요청에만 추가한 system message 같은 값은 model 요청에는 반영되지만
-Agent의 대화 상태를 직접 변경하지 않는다(`SPEC §5.3`).
+Run은 기존 Agent처럼 user message를 상태에 넣고 step을 시작한다. Agent는 누적 메시지를 깊게 복제하고, Tool registry가
+복제해 반환한 schema를 인수해 Agent 상태와 분리된 `llm.ChatRequest`를 만든 뒤 `pre-model` helper를 호출한다. 각 hook은
+앞 hook이 반환한 요청을 받아 등록 순서대로 변경하고, 최종 요청이 provider에 전달된다. Hook이 요청에만 추가한 system
+message 같은 값은 model 요청에는 반영되지만 Agent의 대화 상태를 직접 변경하지 않는다(`SPEC §5.3`).
 
-Provider 호출에는 Runner의 model timeout으로 만든 자식 context를 적용한다. 이 timeout은 model HTTP 호출에만 적용하고
-Runner 호출자가 전달한 context는 전체 run 취소를 계속 제어한다. Provider 응답이 오면 각 `post-model` hook이 최종
-pre-model 요청과 앞 hook이 반환한 응답을 받아 같은 등록 순서로 처리한다. 마지막 응답이 Agent에 돌아가 메시지 누적,
-Tool 실행 여부, final 여부를 결정한다(`SPEC §5.4`).
+Agent는 pre-model 처리가 끝난 뒤 LLM 요청 trace를 기록하고, Runner에서 주입된 model timeout으로 자식 context를 만들어
+`LLMClient.Chat`을 호출한다. 이 timeout은 provider 호출에만 적용하고 Runner 호출자가 전달한 context는 전체 run 취소를
+계속 제어한다. Provider 응답이 오면 Agent는 최종 pre-model 요청과 응답을 `post-model` helper에 전달한다. 각 hook은 앞
+hook의 응답 변경을 등록 순서대로 이어받고, 마지막 응답이 메시지 누적, Tool 실행 여부, final 여부를 결정한다(`SPEC §5.4`).
+Agent는 마지막 assistant 응답마다 `ToolCalls` 편의 상태를 다시 계산하므로 final 응답에서는 이전 step의 호출이 남지 않는다.
 
-Middleware가 오류를 반환하면 decorator는 stage, middleware 이름, 원인을 포함한 typed 오류를 반환한다. Pre 오류에서는
-provider를 호출하지 않고, post 오류에서는 이미 끝난 provider 호출의 응답을 Agent 상태에 append하지 않는다. Agent는
-오류 상태와 middleware 전용 trace action을 기록하고 loop를 종료하므로 오류 이후 Tool 또는 model 호출이 없다
+Middleware가 오류를 반환하면 helper는 stage, middleware 이름, 원인을 포함한 typed 오류를 반환한다. Agent loop는 pre
+오류에서 provider를 호출하지 않고, post 오류에서는 이미 끝난 provider 호출의 응답을 상태에 append하지 않는다. 두
+경우 모두 오류 상태와 middleware 전용 trace action을 기록하고 즉시 종료하므로 오류 이후 Tool 또는 model 호출이 없다
 (`SPEC §5.5`).
 
 Agent가 Tool call을 반환받으면 기존 registry lookup, validation, timeout, result message 누적 흐름을 그대로 사용한다.
@@ -153,7 +154,8 @@ func (r *Runner) Run(ctx context.Context, input string) RunnerResult
 trace에 남고 별도 `error` 반환값을 중복해서 두지 않는다. Runner 생성에 필요한 client나 schema 자체가 잘못된 경우만
 `NewRunner`가 오류를 반환한다(`SPEC §5.1`, `SPEC §5.5`, `SPEC §5.7`).
 
-Middleware는 상태를 가진 구현체 계층을 강제하지 않고 함수 hook을 묶은 값으로 표현한다.
+Middleware는 상태를 가진 구현체 계층을 강제하지 않고 함수 hook을 묶은 값으로 표현한다. Runner는 선택적인 model
+timeout과 middleware 목록을 비공개 Agent 생성 경계로 전달해 기존 `Agent.Options` contract를 확장하지 않는다.
 
 ```go
 type PreModelHook func(context.Context, llm.ChatRequest) (llm.ChatRequest, error)
@@ -166,13 +168,18 @@ type ModelMiddleware struct {
 }
 ```
 
-`Name`은 middleware 오류 식별에 사용하고 비어 있으면 Runner 생성 오류로 거부한다. Pre 또는 post 중 하나만 필요한
-middleware는 사용하지 않는 hook을 nil로 둘 수 있지만 두 hook이 모두 nil인 값은 거부한다. Hook closure로 상태를
-보존할 수 있으므로 별도 interface와 no-op method를 요구하지 않는다.
+`Name`은 middleware 오류 식별에 사용한다. 비어 있거나 앞뒤 공백이 있는 이름과 중복 이름은 Runner 생성 오류로 거부한다.
+Pre 또는 post 중 하나만 필요한 middleware는 사용하지 않는 hook을 nil로 둘 수 있지만 두 hook이 모두 nil인 값은
+거부한다. Hook closure로 상태를 보존할 수 있으므로 별도 interface와 no-op method를 요구하지 않는다.
 
-Decorator는 hook에 넘기기 전에 요청의 message, tool schema, tool call argument 같은 slice와 `json.RawMessage`를
-복제한다. Hook이 반환한 값은 다음 hook과 provider에 전달하지만 Agent가 이미 소유한 메시지나 registry schema를 alias로
-변경하지 않는다. Post hook에는 모든 pre hook이 끝난 실제 provider 요청을 함께 전달한다.
+Agent는 model 호출용 요청을 만들 때 message와 그 안의 tool call argument, tool result 같은 중첩 참조값을 복제한다.
+Tool schema는 `Registry.Schemas`가 registry 상태와 분리해 반환한 값을 요청이 그대로 인수한다. Pre hook이 반환한 요청과
+post hook이 반환한 응답은 다시 복제하지 않고 등록 순서대로 다음 hook에 전달한다. 마지막 응답의 소유권은 Agent로
+이전되며, Agent는 이 응답을 상태와 다음 판단에 사용한다. Hook은 반환해 소유권을 이전한 요청이나 응답을 이후 변경하지
+않는다. Post hook에는 모든 pre hook이 끝난 실제 provider 요청을 읽기 전용으로 전달한다.
+
+`LLMClient.Chat`도 요청을 읽기 전용으로 사용하고 참조를 보관하지 않으며, 반환한 응답의 소유권을 호출자에게 이전한다.
+이 계약으로 Agent와 provider 사이에 추가 복사 없이 동일한 model 요청과 최종 응답을 순차 전달한다.
 
 Runner 전용 오류는 `internal/agent`의 typed error로 둔다. 최소 kind는 `middleware`와 `structured_output`이며,
 middleware 오류는 stage와 middleware 이름을, structured output 오류는 schema compile, JSON parse, validation 중 실패한
@@ -190,9 +197,10 @@ config의 `LLM_TIMEOUT`, `TAVILY_API_KEY`, 현재 작업 디렉터리를 조립�
 
 ## 4. 영향 범위
 
-`internal/agent`가 주 변경 대상이다. 새 Runner, model middleware decorator, structured output validator와 테스트가
-추가된다. 기존 `agent.go`는 middleware와 structured output 오류를 정확한 trace action으로 기록하고 Runner가 final
-검증 실패 상태를 만들 수 있도록 좁게 확장한다. 기존 `Agent`, `Options`, `Run` public contract는 유지한다.
+`internal/agent`가 주 변경 대상이다. 새 Runner, model middleware helper, structured output validator와 테스트가 추가된다.
+기존 `agent.go`는 model timeout과 middleware를 선택적으로 주입받아 model 호출 전후 순서와 middleware 오류 상태 전이를
+직접 소유하고, Runner가 final 검증 실패 상태를 만들 수 있도록 확장한다. 기존 `Agent`, `Options`, `Run` 사용 방식과
+middleware 미지정 동작은 유지한다.
 Runner 테스트는 stub LLM client와 함수 hook으로 순서, 요청·응답 변경, 오류 이후 호출 중단, structured output
 성공·실패를 외부 provider 없이 확인한다(`SPEC §5.11`).
 
@@ -209,9 +217,10 @@ Runner의 반복 request, Tool schema, Tool result, final 출력 단언으로 �
 `LLM_TIMEOUT`은 Runner의 model timeout에 매핑한다. 새 환경변수를 추가하는 것은 Phase 4.2 명세의 관찰 조건에 필요하지
 않다.
 
-`internal/llm`, `internal/message`, `internal/tool`의 public contract와 Claude·Ollama provider wire format은 변경하지
-않는다. Middleware는 LLMClient decorator로 구현하고 structured output은 final 응답 이후 검증하므로 provider native
-output schema 필드가 필요하지 않다.
+`internal/llm`, `internal/message`의 타입 형태와 Claude·Ollama provider wire format은 변경하지 않는다. `LLMClient`에는
+읽기 전용 요청과 응답 소유권 이전 계약을 명시하고, Tool registry에는 schema를 생성하지 않고 등록 수를 확인하는 `Len`을
+추가한다. Middleware는 Agent loop가 provider-neutral helper로 적용하고 structured output은 final 응답 이후 검증하므로
+provider native output schema 필드가 필요하지 않다.
 
 외부 저장소나 DB는 추가하지 않는다. Structured output schema와 compiled validator는 Runner 메모리 안에만 있고,
 CLI Tool의 파일 root는 실행 시 현재 작업 디렉터리로 정해진다.
@@ -219,7 +228,7 @@ CLI Tool의 파일 root는 실행 시 현재 작업 디렉터리로 정해진다
 ## 5. Decision Points
 
 1. Runner와 기존 Agent의 책임 경계
-   - 옵션 A: 새 Runner가 middleware client와 validator를 조립하고 기존 Agent를 내부 loop 엔진으로 사용한다.
+   - 옵션 A: 새 Runner가 model 호출 옵션을 비공개 생성 경계로 주입하고 validator를 조립해 기존 Agent를 loop 엔진으로 사용한다.
    - 옵션 B: middleware, schema, structured output 상태를 모두 기존 `Agent.Options`와 `Agent.Run`에 넣는다.
    - 옵션 C: 기존 Agent를 Runner로 이름 변경하고 호출자를 모두 전환한다.
    - trade-off: A는 공개 Agent contract를 보존하면서 상위 실행 경계를 명확히 하지만 옵션 필드가 일부 중복된다. B는
@@ -229,11 +238,12 @@ CLI Tool의 파일 root는 실행 시 현재 작업 디렉터리로 정해진다
      streaming을 추가해야 한다.
 
 2. Middleware 적용 위치와 표현
-   - 옵션 A: `ModelMiddleware` 함수 hook 목록을 사용하는 LLMClient decorator를 Runner가 Agent에 주입한다.
-   - 옵션 B: Agent loop 안에 pre/post 분기를 직접 넣는다.
+   - 옵션 A: Agent loop가 `ModelMiddleware` helper를 호출해 pre-model, `LLMClient.Chat`, post-model 순서를 직접 소유한다.
+   - 옵션 B: `ModelMiddleware` 함수 hook 목록을 사용하는 LLMClient decorator를 Runner가 Agent에 주입한다.
    - 옵션 C: `internal/llm` provider client마다 middleware를 구현한다.
-   - trade-off: A는 모든 provider와 모든 loop step에 한 경계를 재사용하고 hook closure도 허용한다. B는 trace 접근은
-     쉽지만 Agent loop가 횡단 관심사를 직접 소유한다. C는 provider 중복과 동작 차이를 만든다.
+   - trade-off: A는 실행 순서, timeout 범위, 응답 누적 전 실패 지점을 Agent 상태 전이와 함께 드러내며, 순회·상태 분리
+     세부사항은 helper에 남겨 loop 비대화를 제한한다. B는 기존 Agent client contract를 그대로 재사용하지만 middleware
+     실패가 `LLMClient.Chat` 오류처럼 숨고 Agent가 다시 오류 종류를 해석해야 한다. C는 provider 중복과 동작 차이를 만든다.
    - 채택안: 옵션 A.
    - 근거: `SPEC §5.3`~`SPEC §5.5`는 provider-neutral 순서와 오류 중단을 요구한다.
 
