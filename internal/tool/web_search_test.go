@@ -224,6 +224,41 @@ func TestTavilyHTTPClientRejectsMalformedResponse(t *testing.T) {
 	}
 }
 
+func TestTavilyHTTPClientLimitsResponseBytesWhileReading(t *testing.T) {
+	prefix := `{"query":"go","answer":"`
+	suffix := `","results":[]}`
+	tests := []struct {
+		name      string
+		size      int
+		wantError bool
+	}{
+		{name: "at limit", size: DefaultMaxResultBytes},
+		{name: "over limit", size: DefaultMaxResultBytes + 1, wantError: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			padding := tt.size - len(prefix) - len(suffix)
+			body := prefix + strings.Repeat("a", padding) + suffix
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				_, _ = w.Write([]byte(body))
+			}))
+			defer server.Close()
+
+			client := newTavilyHTTPClient(server.URL, server.Client())
+			result, err := client.Search(context.Background(), "tvly-test", tavilySearchRequest{Query: "go", MaxResults: 1})
+			if tt.wantError {
+				if err == nil || !strings.Contains(err.Error(), "byte limit") {
+					t.Fatalf("Search() error = %v, want response size error", err)
+				}
+				return
+			}
+			if err != nil || len(result.Answer) != padding {
+				t.Fatalf("Search() answer/error = %d/%v, want %d bytes", len(result.Answer), err, padding)
+			}
+		})
+	}
+}
+
 type fakeTavilySearchClient struct {
 	response tavilySearchResponse
 	err      error

@@ -43,7 +43,7 @@
       `go test -race ./internal/agent` 및 `go test ./...`를 실행한다.
   - 참조: SPEC §5.2, SPEC §5.11, SPEC §5.12, ANALYSIS §2, ANALYSIS §5.8
 
-- [ ] task-007: Tool 호출·result·전체 run 예산 적용
+- [x] task-007: Tool 호출·result·전체 run 예산 적용
   - 목적: 한 model 응답의 다수 Tool call이나 큰 result가 실행 시간, 메모리, 다음 model context를 무제한으로 키우지
     않으며 호출자가 제한 초과를 일반 성공과 구분한다.
   - 접근: Agent와 Runner에 0일 때 각각 20회와 64KiB를 적용하는 `MaxToolCalls`, `MaxToolResultBytes`를 추가하고 음수는

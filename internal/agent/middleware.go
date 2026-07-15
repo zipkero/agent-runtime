@@ -21,7 +21,8 @@ const (
 type RunnerErrorKind string
 
 const (
-	RunnerErrorKindMiddleware RunnerErrorKind = "middleware"
+	RunnerErrorKindMiddleware     RunnerErrorKind = "middleware"
+	RunnerErrorKindExecutionLimit RunnerErrorKind = "execution_limit"
 )
 
 // RunnerError 는 Runner 고유 실패 분류와 원인을 함께 보존한다.
@@ -29,10 +30,19 @@ type RunnerError struct {
 	Kind       RunnerErrorKind
 	Stage      MiddlewareStage
 	Middleware string
+	Limit      string
+	Current    int
+	Maximum    int
 	Err        error
 }
 
 func (e *RunnerError) Error() string {
+	if e.Kind == RunnerErrorKindExecutionLimit {
+		if e.Maximum > 0 {
+			return fmt.Sprintf("agent runner %s %s: current %d exceeds maximum %d", e.Kind, e.Limit, e.Current, e.Maximum)
+		}
+		return fmt.Sprintf("agent runner %s %s: %v", e.Kind, e.Limit, e.Err)
+	}
 	return fmt.Sprintf("agent runner %s %s middleware %q: %v", e.Kind, e.Stage, e.Middleware, e.Err)
 }
 
@@ -125,5 +135,15 @@ func middlewareError(stage MiddlewareStage, name string, err error) error {
 		Stage:      stage,
 		Middleware: name,
 		Err:        err,
+	}
+}
+
+func executionLimitError(limit string, current, maximum int, err error) error {
+	return &RunnerError{
+		Kind:    RunnerErrorKindExecutionLimit,
+		Limit:   limit,
+		Current: current,
+		Maximum: maximum,
+		Err:     err,
 	}
 }

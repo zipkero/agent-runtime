@@ -17,13 +17,16 @@ var (
 	ErrDuplicateName = errors.New("tool name is already registered")
 )
 
+// DefaultMaxResultBytes 는 Runtime과 내장 Tool이 사용하는 기본 Tool result 크기 상한이다.
+const DefaultMaxResultBytes = 64 * 1024
+
 // Tool 은 Runtime이 이름으로 찾아 검증하고 실행할 수 있는 provider-neutral contract다.
 type Tool interface {
 	Name() string
 	Description() string
 	Schema() message.ToolSchema
 	Validate(args json.RawMessage) error
-	// Execute는 ctx 취소를 관찰해 반환해야 하며, Runtime은 반환될 때까지 다음 상태로 전이하지 않는다.
+	// Execute 는 ctx 취소를 관찰해 반환해야 하며, Runtime은 반환될 때까지 다음 상태로 전이하지 않는다.
 	Execute(ctx context.Context, args json.RawMessage) (Result, error)
 }
 

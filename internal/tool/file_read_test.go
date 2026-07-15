@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -35,6 +36,41 @@ func TestFileReadReadsRootFile(t *testing.T) {
 	}
 	if got.Content != "hello\nworld" {
 		t.Fatalf("Execute() content = %q, want %q", got.Content, "hello\nworld")
+	}
+}
+
+func TestFileReadLimitsResultBytesWhileReading(t *testing.T) {
+	root := t.TempDir()
+	readFile, err := NewFileRead(root)
+	if err != nil {
+		t.Fatalf("NewFileRead() error = %v", err)
+	}
+	tests := []struct {
+		name      string
+		size      int
+		wantError bool
+	}{
+		{name: "at limit", size: DefaultMaxResultBytes},
+		{name: "over limit", size: DefaultMaxResultBytes + 1, wantError: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			path := tt.name + ".txt"
+			if err := os.WriteFile(filepath.Join(root, path), []byte(strings.Repeat("a", tt.size)), 0o644); err != nil {
+				t.Fatalf("WriteFile() error = %v", err)
+			}
+
+			result, err := readFile.Execute(context.Background(), json.RawMessage(`{"path":`+quoteJSON(t, path)+`}`))
+			if tt.wantError {
+				if !IsExecutionError(err) || !strings.Contains(err.Error(), "byte limit") {
+					t.Fatalf("Execute() error = %v, want result size execution error", err)
+				}
+				return
+			}
+			if err != nil || len(result.Content) != tt.size {
+				t.Fatalf("Execute() result/error = %d/%v, want %d bytes", len(result.Content), err, tt.size)
+			}
+		})
 	}
 }
 

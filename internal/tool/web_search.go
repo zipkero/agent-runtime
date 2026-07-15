@@ -252,9 +252,12 @@ func (c tavilyHTTPClient) Search(ctx context.Context, apiKey string, request tav
 	}
 	defer httpResponse.Body.Close()
 
-	responseBody, err := io.ReadAll(httpResponse.Body)
+	responseBody, err := io.ReadAll(io.LimitReader(httpResponse.Body, DefaultMaxResultBytes+1))
 	if err != nil {
 		return tavilySearchResponse{}, fmt.Errorf("read response: %w", err)
+	}
+	if len(responseBody) > DefaultMaxResultBytes {
+		return tavilySearchResponse{}, fmt.Errorf("response exceeds %d byte limit", DefaultMaxResultBytes)
 	}
 	if httpResponse.StatusCode < 200 || httpResponse.StatusCode >= 300 {
 		return tavilySearchResponse{}, fmt.Errorf("status %d: %s", httpResponse.StatusCode, tavilyErrorMessage(responseBody))

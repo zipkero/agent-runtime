@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -878,4 +880,195 @@ func TestRunStoresLLMErrorWithoutAssistantMessage(t *testing.T) {
 		{step: 1, action: TraceActionLLMRequest, status: StatusRunning},
 		{step: 1, action: TraceActionLLMError, status: StatusError, wantErr: llmErr},
 	})
+}
+
+func TestRunStopsBeforeExceedingDefaultToolCallLimit(t *testing.T) {
+	calls := make([]message.ToolCall, defaultMaxToolCalls+1)
+	for i := range calls {
+		calls[i] = message.ToolCall{
+			ID:        fmt.Sprintf("call-%d", i+1),
+			Name:      "lookup",
+			Arguments: json.RawMessage(`{}`),
+		}
+	}
+	client := &stubClient{response: llm.ChatResponse{Message: message.Assistant("many calls", calls...)}}
+	lookupTool := &stubTool{name: "lookup", result: runtimetool.Result{Content: "ok"}}
+	registry := runtimetool.NewRegistry()
+	if err := registry.Register(lookupTool); err != nil {
+		t.Fatalf("Register() error = %v", err)
+	}
+	agent, err := New(Options{Client: client, MaxSteps: 2, Tools: registry})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	state := agent.Run(context.Background(), "use many tools")
+
+	if state.Status != StatusError || client.calls != 1 || lookupTool.calls != defaultMaxToolCalls {
+		t.Fatalf("status/client calls/tool calls = %q/%d/%d, want error/1/%d", state.Status, client.calls, lookupTool.calls, defaultMaxToolCalls)
+	}
+	var limitErr *RunnerError
+	if !errors.As(state.LastError, &limitErr) || limitErr.Kind != RunnerErrorKindExecutionLimit ||
+		limitErr.Limit != limitMaxToolCalls || limitErr.Current != defaultMaxToolCalls+1 || limitErr.Maximum != defaultMaxToolCalls {
+		t.Fatalf("LastError = %+v, want max tool calls execution limit", state.LastError)
+	}
+	lastTrace := state.Trace[len(state.Trace)-1]
+	if lastTrace.Action != TraceActionExecutionLimit || lastTrace.Status != StatusError || !errors.Is(lastTrace.Error, state.LastError) {
+		t.Fatalf("last trace = %+v, want execution limit error", lastTrace)
+	}
+}
+
+func TestRunAppliesToolCallLimitAcrossModelSteps(t *testing.T) {
+	toolCall := func(id string) message.ToolCall {
+		return message.ToolCall{ID: id, Name: "lookup", Arguments: json.RawMessage(`{}`)}
+	}
+	client := &stubClient{responses: []llm.ChatResponse{
+		{Message: message.Assistant("first", toolCall("call-1"))},
+		{Message: message.Assistant("second", toolCall("call-2"))},
+		{Message: message.Assistant("third", toolCall("call-3"))},
+	}}
+	lookupTool := &stubTool{name: "lookup", result: runtimetool.Result{Content: "ok"}}
+	registry := runtimetool.NewRegistry()
+	if err := registry.Register(lookupTool); err != nil {
+		t.Fatalf("Register() error = %v", err)
+	}
+	agent, err := New(Options{Client: client, MaxSteps: 4, Tools: registry, MaxToolCalls: 2})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	state := agent.Run(context.Background(), "use tools across steps")
+
+	if state.Status != StatusError || client.calls != 3 || lookupTool.calls != 2 {
+		t.Fatalf("status/client calls/tool calls = %q/%d/%d, want error/3/2", state.Status, client.calls, lookupTool.calls)
+	}
+	var limitErr *RunnerError
+	if !errors.As(state.LastError, &limitErr) || limitErr.Limit != limitMaxToolCalls || limitErr.Current != 3 || limitErr.Maximum != 2 {
+		t.Fatalf("LastError = %+v, want cumulative max tool calls limit", state.LastError)
+	}
+}
+
+func TestRunLimitsToolResultBytes(t *testing.T) {
+	limit := runtimetool.DefaultMaxResultBytes
+	tests := []struct {
+		name        string
+		content     string
+		wantError   bool
+		wantCurrent int
+	}{
+		{name: "at limit", content: strings.Repeat("1", limit)},
+		{name: "over limit", content: strings.Repeat("1", limit+1), wantError: true, wantCurrent: limit + 1},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			call := message.ToolCall{ID: "call-1", Name: "lookup", Arguments: json.RawMessage(`{}`)}
+			client := &stubClient{responses: []llm.ChatResponse{
+				{Message: message.Assistant("lookup", call)},
+				{Message: message.Assistant("done")},
+			}}
+			lookupTool := &stubTool{name: "lookup", result: runtimetool.Result{Content: tt.content}}
+			registry := runtimetool.NewRegistry()
+			if err := registry.Register(lookupTool); err != nil {
+				t.Fatalf("Register() error = %v", err)
+			}
+			agent, err := New(Options{Client: client, MaxSteps: 3, Tools: registry})
+			if err != nil {
+				t.Fatalf("New() error = %v", err)
+			}
+
+			state := agent.Run(context.Background(), "use lookup")
+
+			if state.Status != StatusFinal || state.LastError != nil || client.calls != 2 {
+				t.Fatalf("state/client calls = %+v/%d, want final with two calls", state, client.calls)
+			}
+			result := client.requests[1].Messages[2].ToolResult
+			if result == nil || result.IsError != tt.wantError {
+				t.Fatalf("ToolResult = %+v, want error=%v", result, tt.wantError)
+			}
+			if !tt.wantError {
+				if result.Content != tt.content {
+					t.Fatalf("ToolResult.Content = %q, want %q", result.Content, tt.content)
+				}
+				return
+			}
+			if strings.Contains(result.Content, tt.content) {
+				t.Fatalf("ToolResult.Content contains oversized payload: %q", result.Content)
+			}
+			var limitErr *RunnerError
+			traceErr := state.Trace[4].Error
+			if !errors.As(traceErr, &limitErr) || limitErr.Limit != limitToolResultBytes ||
+				limitErr.Current != tt.wantCurrent || limitErr.Maximum != limit {
+				t.Fatalf("tool trace error = %+v, want result byte limit", traceErr)
+			}
+		})
+	}
+}
+
+func TestRunClassifiesCallerDeadlineAsExecutionLimit(t *testing.T) {
+	client := &contextStubClient{}
+	agent, err := New(Options{Client: client, MaxSteps: 1})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Millisecond)
+	defer cancel()
+
+	state := agent.Run(ctx, "wait")
+
+	var limitErr *RunnerError
+	if state.Status != StatusError || !errors.As(state.LastError, &limitErr) ||
+		limitErr.Limit != limitRunDeadline || !errors.Is(state.LastError, context.DeadlineExceeded) {
+		t.Fatalf("state = %+v, want run deadline execution limit", state)
+	}
+	lastTrace := state.Trace[len(state.Trace)-1]
+	if lastTrace.Action != TraceActionExecutionLimit || lastTrace.Status != StatusError {
+		t.Fatalf("last trace = %+v, want execution limit", lastTrace)
+	}
+}
+
+func TestRunClassifiesCallerDeadlineDuringToolAsExecutionLimit(t *testing.T) {
+	call := message.ToolCall{ID: "call-1", Name: "slow", Arguments: json.RawMessage(`{}`)}
+	client := &stubClient{response: llm.ChatResponse{Message: message.Assistant("wait", call)}}
+	slowTool := &stubTool{name: "slow", waitForCtx: true}
+	registry := runtimetool.NewRegistry()
+	if err := registry.Register(slowTool); err != nil {
+		t.Fatalf("Register() error = %v", err)
+	}
+	agent, err := New(Options{Client: client, MaxSteps: 2, Tools: registry, ToolTimeout: time.Second})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Millisecond)
+	defer cancel()
+
+	state := agent.Run(ctx, "use slow tool")
+
+	var limitErr *RunnerError
+	if state.Status != StatusError || slowTool.calls != 1 || !errors.As(state.LastError, &limitErr) ||
+		limitErr.Limit != limitRunDeadline || !errors.Is(state.LastError, context.DeadlineExceeded) {
+		t.Fatalf("state/tool calls = %+v/%d, want run deadline execution limit", state, slowTool.calls)
+	}
+	lastTrace := state.Trace[len(state.Trace)-1]
+	if lastTrace.Action != TraceActionExecutionLimit || lastTrace.Status != StatusError {
+		t.Fatalf("last trace = %+v, want execution limit", lastTrace)
+	}
+}
+
+func TestNewRejectsNegativeToolLimits(t *testing.T) {
+	client := &stubClient{}
+	tests := []struct {
+		name string
+		opts Options
+	}{
+		{name: "tool calls", opts: Options{Client: client, MaxToolCalls: -1}},
+		{name: "tool result bytes", opts: Options{Client: client, MaxToolResultBytes: -1}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if _, err := New(tt.opts); err == nil {
+				t.Fatal("New() error = nil, want negative limit error")
+			}
+		})
+	}
 }

@@ -3,6 +3,7 @@ package tool
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -74,12 +75,21 @@ func (f FileRead) Execute(ctx context.Context, args json.RawMessage) (Result, er
 		return Result{}, ExecutionErrorf("path is not a regular file")
 	}
 
-	content, err := os.ReadFile(path)
+	file, err := os.Open(path)
+	if err != nil {
+		return Result{}, ExecutionErrorf("read file failed: %v", err)
+	}
+	defer file.Close()
+
+	content, err := io.ReadAll(io.LimitReader(file, DefaultMaxResultBytes+1))
 	if ctxErr := ctx.Err(); ctxErr != nil {
 		return Result{}, canceledExecutionError("read file", ctxErr)
 	}
 	if err != nil {
 		return Result{}, ExecutionErrorf("read file failed: %v", err)
+	}
+	if len(content) > DefaultMaxResultBytes {
+		return Result{}, ExecutionErrorf("read file result exceeds %d byte limit", DefaultMaxResultBytes)
 	}
 
 	return Result{Content: string(content)}, nil

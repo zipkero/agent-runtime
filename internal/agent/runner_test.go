@@ -192,6 +192,24 @@ func TestNewRunnerRequiresClient(t *testing.T) {
 	}
 }
 
+func TestNewRunnerRejectsNegativeToolLimits(t *testing.T) {
+	client := &stubClient{}
+	tests := []struct {
+		name string
+		opts RunnerOptions
+	}{
+		{name: "tool calls", opts: RunnerOptions{Client: client, MaxToolCalls: -1}},
+		{name: "tool result bytes", opts: RunnerOptions{Client: client, MaxToolResultBytes: -1}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if _, err := NewRunner(tt.opts); err == nil {
+				t.Fatal("NewRunner() error = nil, want negative limit error")
+			}
+		})
+	}
+}
+
 type deadlineStubClient struct {
 	responses []llm.ChatResponse
 	deadlines []time.Duration
