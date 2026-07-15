@@ -207,10 +207,12 @@ Pre 또는 post 중 하나만 필요한 middleware는 사용하지 않는 hook�
 거부한다. Hook closure로 상태를 보존할 수 있으므로 별도 interface와 no-op method를 요구하지 않는다.
 
 Agent는 model 호출용 요청을 만들 때 message와 그 안의 tool call argument, tool result 같은 중첩 참조값을 복제한다.
-Tool schema는 `Registry.Schemas`가 registry 상태와 분리해 반환한 값을 요청이 그대로 인수한다. Pre hook이 반환한 요청과
-post hook이 반환한 응답은 다시 복제하지 않고 등록 순서대로 다음 hook에 전달한다. 마지막 응답의 소유권은 Agent로
-이전되며, Agent는 이 응답을 상태와 다음 판단에 사용한다. Hook은 반환해 소유권을 이전한 요청이나 응답을 이후 변경하지
-않는다. Post hook에는 모든 pre hook이 끝난 실제 provider 요청을 읽기 전용으로 전달한다.
+Tool schema는 `Registry.Schemas`가 registry 상태와 분리해 반환한 값을 요청이 그대로 인수한다. 각 hook은 현재 작업값을
+받아 변경된 요청이나 응답을 반환하고, helper는 반환값을 다시 복제하지 않고 등록 순서대로 다음 hook에 전달한다. 값
+구조체 안의 slice나 pointer를 통한 중첩 변경은 작업값에 허용하며, 최초 깊은 복사가 Agent 상태와 registry 원본으로 변경이
+번지는 것을 막는다. 마지막 응답의 소유권은 Agent로 이전되고 Agent는 이 응답을 상태와 다음 판단에 사용한다. Hook은
+반환해 소유권을 이전한 요청이나 응답의 내부 참조를 보관하거나 이후 변경하지 않는다. Post hook에는 모든 pre hook이 끝난
+실제 provider 요청을 읽기 전용으로 전달한다.
 
 `LLMClient.Chat`도 요청을 읽기 전용으로 사용하고 참조를 보관하지 않으며, 반환한 응답의 소유권을 호출자에게 이전한다.
 이 계약으로 Agent와 provider 사이에 추가 복사 없이 동일한 model 요청과 최종 응답을 순차 전달한다.
@@ -286,7 +288,8 @@ CLI Tool의 파일 root는 실행 시 현재 작업 디렉터리로 정해진다
    - trade-off: A는 실행 순서, timeout 범위, 응답 누적 전 실패 지점을 Agent 상태 전이와 함께 드러내며, 순회·상태 분리
      세부사항은 helper에 남겨 loop 비대화를 제한한다. B는 기존 Agent client contract를 그대로 재사용하지만 middleware
      실패가 `LLMClient.Chat` 오류처럼 숨고 Agent가 다시 오류 종류를 해석해야 한다. C는 provider 중복과 동작 차이를 만든다.
-   - 채택안: 옵션 A.
+   - 채택안: 옵션 A. Hook은 현재 요청이나 응답 값을 받아 변경된 값을 반환하며, helper는 반환값을 등록 순서대로
+     이어서 전달한다.
    - 근거: `SPEC §5.3`~`SPEC §5.5`는 provider-neutral 순서와 오류 중단을 요구한다.
 
 3. Structured output 실패 상태

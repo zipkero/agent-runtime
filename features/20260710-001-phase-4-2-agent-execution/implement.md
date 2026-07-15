@@ -20,13 +20,14 @@
     middleware와 실행 중단 지점을 Runner 결과에서 구분할 수 있다.
   - 접근: 이름과 선택적 pre/post hook을 가진 `ModelMiddleware`를 Agent loop의 각 model 호출 전후에 명시적으로 적용한다.
     Agent는 상태 메시지를 복제하고 registry가 분리해 반환한 Tool schema를 인수해 model 요청을 만든다. Hook 반환값은
-    소유권을 이전해 순서대로 전달하며, 순회와 typed error 생성은 provider-neutral helper로 분리한다.
+    소유권을 이전해 순서대로 전달하고, 작업값의 중첩 참조 변경은 최초 복사 경계 안에서 허용한다. 순회와 typed error
+    생성은 provider-neutral helper로 분리한다.
   - 검증 조건:
     - 결과: Tool loop의 모든 model 호출에서 pre/post hook이 등록 순서대로 실행되고 앞 hook의 변경값이 다음 hook,
       provider와 Agent 판단에 반영된다. pre 실패 시 provider가 호출되지 않고 post 실패 시 응답이 상태에 누적되지
       않으며, 실패 이후 model 또는 Tool 호출이 발생하지 않는다.
-    - 확인: 테스트 middleware와 stub client로 hook 순서, 요청·응답 변경, Agent 상태와 model 요청의 중첩값 alias 방지,
-      middleware 이름의 공백·중복 검증, 오류 stage·원인과 호출 전후 trace, 오류 이후 실행 중단을 확인하고
+    - 확인: 값 반환형 테스트 middleware와 stub client로 hook 순서, 요청·응답 변경, Agent 상태와 model 요청의 중첩값
+      alias 방지, middleware 이름의 공백·중복 검증, 오류 stage·원인과 호출 전후 trace, 오류 이후 실행 중단을 확인하고
       `go test ./internal/agent`를 실행한다.
   - 참조: SPEC §5.3, SPEC §5.4, SPEC §5.5, SPEC §5.11, ANALYSIS §1, ANALYSIS §2, ANALYSIS §3
 
