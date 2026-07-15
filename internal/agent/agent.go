@@ -243,31 +243,16 @@ func (a *Agent) executeToolCall(ctx context.Context, state *AgentState, call mes
 	}
 	defer cancel()
 
-	resultCh := make(chan toolExecutionResult, 1)
-	go func() {
-		result, err := registeredTool.Execute(toolCtx, call.Arguments)
-		resultCh <- toolExecutionResult{result: result, err: err}
-	}()
-
-	select {
-	case execution := <-resultCh:
-		if execution.err != nil {
-			if errors.Is(execution.err, context.DeadlineExceeded) || errors.Is(toolCtx.Err(), context.DeadlineExceeded) {
-				state.recordTool(TraceActionToolTimeout, call, true, execution.err)
-			} else {
-				state.recordTool(TraceActionToolError, call, true, execution.err)
-			}
-			return toolErrorMessage(call, execution.err.Error())
+	result, err := registeredTool.Execute(toolCtx, call.Arguments)
+	if err != nil {
+		if errors.Is(err, context.DeadlineExceeded) || errors.Is(toolCtx.Err(), context.DeadlineExceeded) {
+			state.recordTool(TraceActionToolTimeout, call, true, err)
+		} else {
+			state.recordTool(TraceActionToolError, call, true, err)
 		}
-
-		state.recordTool(TraceActionToolResult, call, false, nil)
-		return message.Tool(message.ToolResult{
-			ToolCallID: call.ID,
-			Name:       call.Name,
-			Content:    execution.result.Content,
-		})
-	case <-toolCtx.Done():
-		err := toolCtx.Err()
+		return toolErrorMessage(call, err.Error())
+	}
+	if err := toolCtx.Err(); err != nil {
 		if errors.Is(err, context.DeadlineExceeded) {
 			state.recordTool(TraceActionToolTimeout, call, true, err)
 		} else {
@@ -275,11 +260,13 @@ func (a *Agent) executeToolCall(ctx context.Context, state *AgentState, call mes
 		}
 		return toolErrorMessage(call, err.Error())
 	}
-}
 
-type toolExecutionResult struct {
-	result tool.Result
-	err    error
+	state.recordTool(TraceActionToolResult, call, false, nil)
+	return message.Tool(message.ToolResult{
+		ToolCallID: call.ID,
+		Name:       call.Name,
+		Content:    result.Content,
+	})
 }
 
 func toolErrorMessage(call message.ToolCall, content string) message.Message {

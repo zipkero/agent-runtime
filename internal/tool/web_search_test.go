@@ -118,6 +118,21 @@ func TestWebSearchReturnsExecutionErrorForProviderFailure(t *testing.T) {
 	}
 }
 
+func TestWebSearchReturnsExecutionErrorWhenContextCanceled(t *testing.T) {
+	client := &fakeTavilySearchClient{}
+	webSearch := newWebSearch("tvly-test", client)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	_, err := webSearch.Execute(ctx, json.RawMessage(`{"query":"go"}`))
+	if !IsExecutionError(err) || !errors.Is(err, context.Canceled) {
+		t.Fatalf("Execute() error = %v, want canceled execution error", err)
+	}
+	if len(client.requests) != 0 {
+		t.Fatalf("client requests = %d, want 0", len(client.requests))
+	}
+}
+
 func TestWebSearchSchemaMatchesToolIdentity(t *testing.T) {
 	webSearch := NewWebSearch("tvly-test")
 	schema := webSearch.Schema()

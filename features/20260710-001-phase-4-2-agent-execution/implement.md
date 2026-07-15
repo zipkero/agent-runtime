@@ -31,7 +31,7 @@
       `go test ./internal/agent`를 실행한다.
   - 참조: SPEC §5.3, SPEC §5.4, SPEC §5.5, SPEC §5.11, ANALYSIS §1, ANALYSIS §2, ANALYSIS §3
 
-- [ ] task-005: Tool timeout 실행 수명 안정화
+- [x] task-005: Tool timeout 실행 수명 안정화
   - 목적: Tool timeout이나 caller cancellation 뒤에 해당 Tool 실행이 background에 남지 않고, Agent가 Tool 반환 이후에만
     다음 상태로 전이한다.
   - 접근: Agent의 goroutine 기반 Tool 호출을 timeout context를 전달하는 동기 호출로 바꾸고 Runtime timeout을 cooperative
@@ -42,18 +42,6 @@
     - 확인: 반환 시점을 제어하는 test Tool로 정상·timeout·caller cancellation과 후속 model 호출 순서를 검증하고,
       `go test -race ./internal/agent` 및 `go test ./...`를 실행한다.
   - 참조: SPEC §5.2, SPEC §5.11, SPEC §5.12, ANALYSIS §2, ANALYSIS §5.8
-
-- [ ] task-006: File Tool root 격리 강화
-  - 목적: File Read와 File Save가 symbolic link나 경로 변경을 통해 주입된 root 밖을 읽거나 변경하지 않으며, 거부된
-    저장이 root 밖에 디렉터리나 파일을 남기지 않는다.
-  - 접근: lexical path 검사와 사후 symlink 순회를 보안 경계로 사용하지 않고, 각 실행에서 Go 1.26 표준 `os.OpenRoot`로
-    root를 열어 `os.Root` 연산으로 읽기, parent 생성, 파일 쓰기를 수행한 뒤 닫는다.
-  - 검증 조건:
-    - 결과: root 내부 일반 파일의 기존 읽기·저장·overwrite 동작은 유지되고, root 밖을 가리키는 중간·최종 symlink와
-      symlink 아래 새 parent 경로는 오류로 거부되며 root 밖에는 어떤 항목도 생성되지 않는다.
-    - 확인: 임시 root와 외부 디렉터리를 사용해 File Read·File Save의 symlink escape, nested parent 생성, overwrite,
-      일반 경로 회귀를 테스트하고 `go test ./internal/tool` 및 `go test ./...`를 실행한다.
-  - 참조: SPEC §5.2, SPEC §5.9, SPEC §5.11, SPEC §5.13, ANALYSIS §2, ANALYSIS §5.9
 
 - [ ] task-007: Tool 호출·result·전체 run 예산 적용
   - 목적: 한 model 응답의 다수 Tool call이나 큰 result가 실행 시간, 메모리, 다음 model context를 무제한으로 키우지
@@ -84,20 +72,6 @@
   - 참조: SPEC §5.1, SPEC §5.8, SPEC §5.10, SPEC §5.11, SPEC §5.15, ANALYSIS §2, ANALYSIS §3,
     ANALYSIS §5.11
 
-- [ ] task-009: CLI Code Execution opt-in과 자식 환경 제한
-  - 목적: CLI가 명시적 활성화 없이 host code 실행 capability를 노출하지 않고, 활성화된 Code Execution도 LLM·Tavily
-    secret을 포함한 process 환경 전체를 자식 Go process에 전달하지 않는다.
-  - 접근: config와 `.env.example`에 기본 false인 `ENABLE_CODE_EXECUTION`을 추가하고 true일 때만 Tool을 등록한다. 자식
-    환경은 `PATH`, `TMPDIR`, `GOROOT`, `GOCACHE`, `GOMODCACHE`, `GOPATH`, `GOOS`, `GOARCH`, `CGO_ENABLED` allowlist와
-    강제된 `GOWORK=off`로 구성한다.
-  - 검증 조건:
-    - 결과: 기본 CLI schema에는 Code Execution이 없고 opt-in 때만 추가된다. 허용된 Go 명령은 필요한 allowlist 환경에서
-      동작하며 `LLM_API_KEY`, `TAVILY_API_KEY`와 임의 환경변수는 자식 process에서 관찰되지 않는다.
-    - 확인: config 기본값·boolean parsing, CLI Tool 등록 목록, 자식 process 환경 allowlist와 secret 부재를 테스트하고
-      `go test ./internal/config ./internal/tool ./cmd/agent-runtime` 및 `go test ./...`를 실행한다.
-  - 참조: SPEC §5.9, SPEC §5.10, SPEC §5.11, SPEC §5.16, ANALYSIS §1, ANALYSIS §3, ANALYSIS §4,
-    ANALYSIS §5.12
-
 - [ ] task-010: Timeout과 실행 제한 설정 검증 통일
   - 목적: 잘못된 비양수 설정이 CLI에서는 즉시 timeout, Runner에서는 무제한으로 다르게 동작하지 않고 실행 전에
     일관된 오류로 확인된다.
@@ -124,6 +98,32 @@
     - 확인: valid JSON, malformed JSON, schema 불일치, 빈·잘못된 schema, local `$ref`, 차단된 외부 `$ref`, schema 미지정 경로를
       단위 테스트하고 `go test ./internal/agent`와 `go test ./...`를 실행한다.
   - 참조: SPEC §5.6, SPEC §5.7, SPEC §5.8, SPEC §5.11, ANALYSIS §1, ANALYSIS §2, ANALYSIS §3, ANALYSIS §4
+
+- [ ] task-006: File Tool root 격리 강화
+  - 목적: File Read와 File Save가 symbolic link나 경로 변경을 통해 주입된 root 밖을 읽거나 변경하지 않으며, 거부된
+    저장이 root 밖에 디렉터리나 파일을 남기지 않는다.
+  - 접근: lexical path 검사와 사후 symlink 순회를 보안 경계로 사용하지 않고, 각 실행에서 Go 1.26 표준 `os.OpenRoot`로
+    root를 열어 `os.Root` 연산으로 읽기, parent 생성, 파일 쓰기를 수행한 뒤 닫는다.
+  - 검증 조건:
+    - 결과: root 내부 일반 파일의 기존 읽기·저장·overwrite 동작은 유지되고, root 밖을 가리키는 중간·최종 symlink와
+      symlink 아래 새 parent 경로는 오류로 거부되며 root 밖에는 어떤 항목도 생성되지 않는다.
+    - 확인: 임시 root와 외부 디렉터리를 사용해 File Read·File Save의 symlink escape, nested parent 생성, overwrite,
+      일반 경로 회귀를 테스트하고 `go test ./internal/tool` 및 `go test ./...`를 실행한다.
+  - 참조: SPEC §5.2, SPEC §5.9, SPEC §5.11, SPEC §5.13, ANALYSIS §2, ANALYSIS §5.9
+
+- [ ] task-009: CLI Code Execution opt-in과 자식 환경 제한
+  - 목적: CLI가 명시적 활성화 없이 host code 실행 capability를 노출하지 않고, 활성화된 Code Execution도 LLM·Tavily
+    secret을 포함한 process 환경 전체를 자식 Go process에 전달하지 않는다.
+  - 접근: config와 `.env.example`에 기본 false인 `ENABLE_CODE_EXECUTION`을 추가하고 true일 때만 Tool을 등록한다. 자식
+    환경은 `PATH`, `TMPDIR`, `GOROOT`, `GOCACHE`, `GOMODCACHE`, `GOPATH`, `GOOS`, `GOARCH`, `CGO_ENABLED` allowlist와
+    강제된 `GOWORK=off`로 구성한다.
+  - 검증 조건:
+    - 결과: 기본 CLI schema에는 Code Execution이 없고 opt-in 때만 추가된다. 허용된 Go 명령은 필요한 allowlist 환경에서
+      동작하며 `LLM_API_KEY`, `TAVILY_API_KEY`와 임의 환경변수는 자식 process에서 관찰되지 않는다.
+    - 확인: config 기본값·boolean parsing, CLI Tool 등록 목록, 자식 process 환경 allowlist와 secret 부재를 테스트하고
+      `go test ./internal/config ./internal/tool ./cmd/agent-runtime` 및 `go test ./...`를 실행한다.
+  - 참조: SPEC §5.9, SPEC §5.10, SPEC §5.11, SPEC §5.16, ANALYSIS §1, ANALYSIS §3, ANALYSIS §4,
+    ANALYSIS §5.12
 
 - [ ] task-004: CLI를 Runner 기반 Agent 실행으로 전환
   - 목적: CLI 사용자가 현재 작업 디렉터리 범위의 Phase 3·4.1 Tool을 Agent loop에서 사용하고 final assistant 응답 또는

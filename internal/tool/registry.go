@@ -23,6 +23,7 @@ type Tool interface {
 	Description() string
 	Schema() message.ToolSchema
 	Validate(args json.RawMessage) error
+	// Execute는 ctx 취소를 관찰해 반환해야 하며, Runtime은 반환될 때까지 다음 상태로 전이하지 않는다.
 	Execute(ctx context.Context, args json.RawMessage) (Result, error)
 }
 

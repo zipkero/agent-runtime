@@ -3,6 +3,7 @@ package tool
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -95,6 +96,20 @@ func TestFileReadReturnsExecutionErrors(t *testing.T) {
 				t.Fatalf("Execute() error = %v, want execution error", err)
 			}
 		})
+	}
+}
+
+func TestFileReadReturnsExecutionErrorWhenContextCanceled(t *testing.T) {
+	readFile, err := NewFileRead(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewFileRead() error = %v", err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	_, err = readFile.Execute(ctx, json.RawMessage(`{"path":"note.txt"}`))
+	if !IsExecutionError(err) || !errors.Is(err, context.Canceled) {
+		t.Fatalf("Execute() error = %v, want canceled execution error", err)
 	}
 }
 

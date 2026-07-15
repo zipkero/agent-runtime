@@ -64,7 +64,7 @@ func (f FileSave) Execute(ctx context.Context, args json.RawMessage) (Result, er
 		return Result{}, err
 	}
 	if err := ctx.Err(); err != nil {
-		return Result{}, ExecutionErrorf("save file canceled: %v", err)
+		return Result{}, canceledExecutionError("save file", err)
 	}
 
 	info, err := os.Lstat(target)
@@ -89,11 +89,15 @@ func (f FileSave) Execute(ctx context.Context, args json.RawMessage) (Result, er
 		return Result{}, err
 	}
 	if err := ctx.Err(); err != nil {
-		return Result{}, ExecutionErrorf("save file canceled: %v", err)
+		return Result{}, canceledExecutionError("save file", err)
 	}
 
 	contentBytes := []byte(*arguments.Content)
-	if err := os.WriteFile(target, contentBytes, 0o644); err != nil {
+	err = os.WriteFile(target, contentBytes, 0o644)
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return Result{}, canceledExecutionError("save file", ctxErr)
+	}
+	if err != nil {
 		return Result{}, ExecutionErrorf("write file failed: %v", err)
 	}
 

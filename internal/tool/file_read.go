@@ -57,10 +57,13 @@ func (f FileRead) Validate(args json.RawMessage) error {
 	return err
 }
 
-func (f FileRead) Execute(_ context.Context, args json.RawMessage) (Result, error) {
+func (f FileRead) Execute(ctx context.Context, args json.RawMessage) (Result, error) {
 	path, err := f.resolvePath(args)
 	if err != nil {
 		return Result{}, err
+	}
+	if err := ctx.Err(); err != nil {
+		return Result{}, canceledExecutionError("read file", err)
 	}
 
 	info, err := os.Lstat(path)
@@ -72,6 +75,9 @@ func (f FileRead) Execute(_ context.Context, args json.RawMessage) (Result, erro
 	}
 
 	content, err := os.ReadFile(path)
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return Result{}, canceledExecutionError("read file", ctxErr)
+	}
 	if err != nil {
 		return Result{}, ExecutionErrorf("read file failed: %v", err)
 	}

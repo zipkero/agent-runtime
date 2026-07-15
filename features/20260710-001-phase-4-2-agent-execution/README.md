@@ -26,3 +26,4 @@ structured output 검증, provider-neutral Runner와 CLI 실행 경로를 추가
 - 2026-07-14: Task 002 상태·trace·소유권 계약 안정화
 - 2026-07-14: Task 005~010 실행 안전성 안정화 체크리스트 추가
 - 2026-07-15: Task 002 값 반환형 hook과 작업값 소유권 계약 확정
+- 2026-07-15: Task 의존성 기준 실행 순서 정리

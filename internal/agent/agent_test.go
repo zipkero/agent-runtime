@@ -19,10 +19,14 @@ type stubClient struct {
 	request   llm.ChatRequest
 	requests  []llm.ChatRequest
 	calls     int
+	callStart chan int
 }
 
 func (c *stubClient) Chat(_ context.Context, req llm.ChatRequest) (llm.ChatResponse, error) {
 	c.calls++
+	if c.callStart != nil {
+		c.callStart <- c.calls
+	}
 	c.request = llm.ChatRequest{
 		Model:    req.Model,
 		Messages: append([]message.Message(nil), req.Messages...),
@@ -51,6 +55,62 @@ type stubTool struct {
 	args          json.RawMessage
 	validateCalls int
 	calls         int
+}
+
+type controlledTool struct {
+	result         runtimetool.Result
+	executeErr     error
+	waitForContext bool
+	started        chan struct{}
+	contextDone    chan struct{}
+	release        chan struct{}
+	returned       chan struct{}
+}
+
+func newControlledTool(result runtimetool.Result, executeErr error, waitForContext bool) *controlledTool {
+	return &controlledTool{
+		result:         result,
+		executeErr:     executeErr,
+		waitForContext: waitForContext,
+		started:        make(chan struct{}),
+		contextDone:    make(chan struct{}),
+		release:        make(chan struct{}),
+		returned:       make(chan struct{}),
+	}
+}
+
+func (*controlledTool) Name() string {
+	return "controlled"
+}
+
+func (*controlledTool) Description() string {
+	return "Control Tool execution timing in tests."
+}
+
+func (*controlledTool) Schema() message.ToolSchema {
+	return message.ToolSchema{Name: "controlled", InputSchema: json.RawMessage(`{"type":"object"}`)}
+}
+
+func (*controlledTool) Validate(json.RawMessage) error {
+	return nil
+}
+
+func (t *controlledTool) Execute(ctx context.Context, _ json.RawMessage) (runtimetool.Result, error) {
+	close(t.started)
+	if t.waitForContext {
+		<-ctx.Done()
+		close(t.contextDone)
+	}
+	<-t.release
+	defer close(t.returned)
+
+	if err := ctx.Err(); err != nil {
+		return runtimetool.Result{}, err
+	}
+	if t.executeErr != nil {
+		return runtimetool.Result{}, t.executeErr
+	}
+	return t.result, nil
 }
 
 func (t *stubTool) Name() string {
@@ -522,6 +582,161 @@ func TestRunAppendsToolTimeoutResultAndContinues(t *testing.T) {
 		{step: 2, action: TraceActionLLMResponse, status: StatusRunning},
 		{step: 2, action: TraceActionFinal, status: StatusFinal},
 	})
+}
+
+// TestRunWaitsForToolReturnBeforeContinuing 은 Tool 실행 수명과 Agent 상태 전이가 분리되지 않는지 확인한다.
+func TestRunWaitsForToolReturnBeforeContinuing(t *testing.T) {
+	executeErr := errors.New("controlled execution failed")
+	tests := []struct {
+		name            string
+		result          runtimetool.Result
+		executeErr      error
+		waitForContext  bool
+		toolTimeout     time.Duration
+		cancelCaller    bool
+		wantAction      TraceAction
+		wantTraceErr    error
+		wantResult      string
+		wantResultError bool
+	}{
+		{
+			name:       "success",
+			result:     runtimetool.Result{Content: "controlled result"},
+			wantAction: TraceActionToolResult,
+			wantResult: "controlled result",
+		},
+		{
+			name:            "execution error",
+			executeErr:      executeErr,
+			wantAction:      TraceActionToolError,
+			wantTraceErr:    executeErr,
+			wantResult:      executeErr.Error(),
+			wantResultError: true,
+		},
+		{
+			name:            "timeout",
+			waitForContext:  true,
+			toolTimeout:     10 * time.Millisecond,
+			wantAction:      TraceActionToolTimeout,
+			wantTraceErr:    context.DeadlineExceeded,
+			wantResult:      context.DeadlineExceeded.Error(),
+			wantResultError: true,
+		},
+		{
+			name:            "caller cancellation",
+			waitForContext:  true,
+			toolTimeout:     time.Second,
+			cancelCaller:    true,
+			wantAction:      TraceActionToolError,
+			wantTraceErr:    context.Canceled,
+			wantResult:      context.Canceled.Error(),
+			wantResultError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			toolCall := message.ToolCall{ID: "call-controlled", Name: "controlled", Arguments: json.RawMessage(`{}`)}
+			client := &stubClient{
+				responses: []llm.ChatResponse{
+					{Message: message.Assistant("using controlled tool", toolCall)},
+					{Message: message.Assistant("final after controlled tool")},
+				},
+				callStart: make(chan int, 2),
+			}
+			controlled := newControlledTool(tt.result, tt.executeErr, tt.waitForContext)
+			registry := runtimetool.NewRegistry()
+			if err := registry.Register(controlled); err != nil {
+				t.Fatalf("Register() error = %v", err)
+			}
+			agent, err := New(Options{
+				Client:      client,
+				Model:       "test-model",
+				MaxSteps:    3,
+				Tools:       registry,
+				ToolTimeout: tt.toolTimeout,
+			})
+			if err != nil {
+				t.Fatalf("New() error = %v", err)
+			}
+
+			runCtx, cancelRun := context.WithCancel(context.Background())
+			defer cancelRun()
+			runDone := make(chan AgentState, 1)
+			go func() {
+				runDone <- agent.Run(runCtx, "use controlled tool")
+			}()
+
+			select {
+			case <-controlled.started:
+			case <-time.After(time.Second):
+				t.Fatal("Tool Execute did not start")
+			}
+			if call := <-client.callStart; call != 1 {
+				t.Fatalf("first model call = %d, want 1", call)
+			}
+			if tt.cancelCaller {
+				cancelRun()
+			}
+			if tt.waitForContext {
+				select {
+				case <-controlled.contextDone:
+				case <-time.After(time.Second):
+					t.Fatal("Tool did not observe context cancellation")
+				}
+			}
+
+			select {
+			case call := <-client.callStart:
+				close(controlled.release)
+				t.Fatalf("model call %d started before Tool Execute returned", call)
+			case <-runDone:
+				close(controlled.release)
+				t.Fatal("Agent returned before Tool Execute returned")
+			case <-time.After(50 * time.Millisecond):
+			}
+
+			close(controlled.release)
+			select {
+			case <-controlled.returned:
+			case <-time.After(time.Second):
+				t.Fatal("Tool Execute did not return")
+			}
+			select {
+			case call := <-client.callStart:
+				if call != 2 {
+					t.Fatalf("next model call = %d, want 2", call)
+				}
+			case <-time.After(time.Second):
+				t.Fatal("next model call did not start after Tool Execute returned")
+			}
+
+			var state AgentState
+			select {
+			case state = <-runDone:
+			case <-time.After(time.Second):
+				t.Fatal("Agent did not return")
+			}
+			if state.Status != StatusFinal || state.FinalAnswer != "final after controlled tool" {
+				t.Fatalf("state = %+v, want final result", state)
+			}
+			toolMessage := state.Messages[2]
+			if toolMessage.ToolResult == nil || toolMessage.ToolResult.Content != tt.wantResult ||
+				toolMessage.ToolResult.IsError != tt.wantResultError {
+				t.Fatalf("ToolResult = %+v, want content=%q error=%v", toolMessage.ToolResult, tt.wantResult, tt.wantResultError)
+			}
+			assertTrace(t, state.Trace, []expectedTrace{
+				{step: 0, action: TraceActionUserMessage, status: StatusRunning},
+				{step: 1, action: TraceActionLLMRequest, status: StatusRunning},
+				{step: 1, action: TraceActionLLMResponse, status: StatusRunning},
+				{step: 1, action: TraceActionToolCall, status: StatusRunning, toolCallID: toolCall.ID, toolName: toolCall.Name},
+				{step: 1, action: tt.wantAction, status: StatusRunning, toolCallID: toolCall.ID, toolName: toolCall.Name, isError: tt.wantResultError, wantErr: tt.wantTraceErr},
+				{step: 2, action: TraceActionLLMRequest, status: StatusRunning},
+				{step: 2, action: TraceActionLLMResponse, status: StatusRunning},
+				{step: 2, action: TraceActionFinal, status: StatusFinal},
+			})
+		})
+	}
 }
 
 // TestRunStopsAfterToolResultWhenMaxStepsReached 는 tool result 뒤 max step에 도달하면 다음 LLM 요청 없이 종료하는지 확인한다.

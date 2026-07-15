@@ -54,6 +54,14 @@ func ExecutionErrorf(format string, args ...any) error {
 	}
 }
 
+func canceledExecutionError(operation string, err error) error {
+	return &Error{
+		Kind:    ErrorKindExecution,
+		Message: fmt.Sprintf("%s canceled: %v", operation, err),
+		Err:     err,
+	}
+}
+
 func ConfigurationErrorf(format string, args ...any) error {
 	return &Error{
 		Kind:    ErrorKindConfiguration,

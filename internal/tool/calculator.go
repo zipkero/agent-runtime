@@ -36,10 +36,13 @@ func (Calculator) Validate(args json.RawMessage) error {
 	return err
 }
 
-func (Calculator) Execute(_ context.Context, args json.RawMessage) (Result, error) {
+func (Calculator) Execute(ctx context.Context, args json.RawMessage) (Result, error) {
 	arguments, err := decodeCalculatorArguments(args)
 	if err != nil {
 		return Result{}, err
+	}
+	if err := ctx.Err(); err != nil {
+		return Result{}, canceledExecutionError("calculator", err)
 	}
 
 	var value float64

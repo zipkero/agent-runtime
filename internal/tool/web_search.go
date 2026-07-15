@@ -61,6 +61,9 @@ func (w WebSearch) Execute(ctx context.Context, args json.RawMessage) (Result, e
 	if err != nil {
 		return Result{}, err
 	}
+	if err := ctx.Err(); err != nil {
+		return Result{}, canceledExecutionError("web search", err)
+	}
 	if w.apiKey == "" {
 		return Result{}, ConfigurationErrorf("Tavily API key is required")
 	}
@@ -76,6 +79,9 @@ func (w WebSearch) Execute(ctx context.Context, args json.RawMessage) (Result, e
 		IncludeAnswer:     true,
 		IncludeRawContent: false,
 	})
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return Result{}, canceledExecutionError("web search", ctxErr)
+	}
 	if err != nil {
 		return Result{}, ExecutionErrorf("Tavily search failed: %v", err)
 	}

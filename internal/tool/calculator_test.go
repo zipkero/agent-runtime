@@ -3,6 +3,7 @@ package tool
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"testing"
 )
 
@@ -71,6 +72,17 @@ func TestCalculatorReturnsExecutionErrorForDivisionByZero(t *testing.T) {
 	_, err := calculator.Execute(context.Background(), args)
 	if !IsExecutionError(err) {
 		t.Fatalf("Execute() error = %v, want execution error", err)
+	}
+}
+
+func TestCalculatorReturnsExecutionErrorWhenContextCanceled(t *testing.T) {
+	calculator := NewCalculator()
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	_, err := calculator.Execute(ctx, json.RawMessage(`{"left":2,"operator":"+","right":3}`))
+	if !IsExecutionError(err) || !errors.Is(err, context.Canceled) {
+		t.Fatalf("Execute() error = %v, want canceled execution error", err)
 	}
 }
 

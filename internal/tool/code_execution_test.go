@@ -3,6 +3,7 @@ package tool
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -165,8 +166,8 @@ func TestCodeExecutionReturnsExecutionErrorWhenContextCanceled(t *testing.T) {
 	cancel()
 
 	got, err := codeExecution.Execute(ctx, json.RawMessage(`{"args":["version"]}`))
-	if !IsExecutionError(err) {
-		t.Fatalf("Execute() error = %v, want execution error", err)
+	if !IsExecutionError(err) || !errors.Is(err, context.Canceled) {
+		t.Fatalf("Execute() error = %v, want canceled execution error", err)
 	}
 
 	var content codeExecutionContent

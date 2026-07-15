@@ -3,6 +3,7 @@ package tool
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -209,8 +210,8 @@ func TestFileSaveReturnsExecutionErrorWhenContextCanceled(t *testing.T) {
 	cancel()
 
 	_, err = saveFile.Execute(ctx, json.RawMessage(`{"path":"note.txt","content":"x"}`))
-	if !IsExecutionError(err) {
-		t.Fatalf("Execute() error = %v, want execution error", err)
+	if !IsExecutionError(err) || !errors.Is(err, context.Canceled) {
+		t.Fatalf("Execute() error = %v, want canceled execution error", err)
 	}
 }
 
