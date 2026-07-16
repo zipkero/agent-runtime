@@ -25,7 +25,7 @@ type ollamaClient struct {
 	model      string
 }
 
-// ollamaChatRequest 는 내부 메시지를 Ollama Chat API wire format으로 옮긴 요청이다.
+// ollamaChatRequest 구조체는 내부 메시지를 Ollama Chat API 전송 형식으로 옮긴 요청이다.
 type ollamaChatRequest struct {
 	Model    string                 `json:"model"`
 	Messages []ollamaRequestMessage `json:"messages"`
@@ -78,7 +78,7 @@ type ollamaErrorResponse struct {
 	Error string `json:"error"`
 }
 
-// NewOllamaClient 는 Ollama Chat API를 LLMClient contract 뒤에 연결한다.
+// NewOllamaClient 함수는 Ollama Chat API를 LLMClient 계약 뒤에 연결한다.
 func NewOllamaClient(cfg ProviderConfig) (LLMClient, error) {
 	return newOllamaClient(cfg, http.DefaultClient)
 }

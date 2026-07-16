@@ -9,7 +9,7 @@ import (
 	"github.com/zipkero/agent-runtime/internal/llm"
 )
 
-// MiddlewareStage 는 model 호출에서 middleware가 실행되는 경계를 식별한다.
+// MiddlewareStage 타입은 모델 호출에서 middleware가 실행되는 경계를 식별한다.
 type MiddlewareStage string
 
 const (
@@ -17,7 +17,7 @@ const (
 	MiddlewareStagePostModel MiddlewareStage = "post_model"
 )
 
-// RunnerErrorKind 는 Runner 실행 경계에서 분류하는 오류 종류다.
+// RunnerErrorKind 타입은 Runner 실행 경계에서 분류하는 오류 종류다.
 type RunnerErrorKind string
 
 const (
@@ -25,7 +25,7 @@ const (
 	RunnerErrorKindExecutionLimit RunnerErrorKind = "execution_limit"
 )
 
-// RunnerError 는 Runner 고유 실패 분류와 원인을 함께 보존한다.
+// RunnerError 구조체는 Runner 고유 실패 분류와 원인을 함께 보존한다.
 type RunnerError struct {
 	Kind       RunnerErrorKind
 	Stage      MiddlewareStage
@@ -50,20 +50,20 @@ func (e *RunnerError) Unwrap() error {
 	return e.Err
 }
 
-// IsRunnerErrorKind 는 오류 chain에 지정한 Runner 오류 종류가 있는지 확인한다.
+// IsRunnerErrorKind 함수는 오류 체인에 지정한 Runner 오류 종류가 있는지 확인한다.
 func IsRunnerErrorKind(err error, kind RunnerErrorKind) bool {
 	var runnerErr *RunnerError
 	return errors.As(err, &runnerErr) && runnerErr.Kind == kind
 }
 
-// PreModelHook 은 Agent 상태에서 분리된 현재 요청을 처리한다. 반환한 요청은 소유권이 이전되므로 이후 수정하지 않는다.
+// PreModelHook 함수 타입은 Agent 상태에서 분리된 현재 요청을 처리한다. 반환한 요청은 소유권이 이전되므로 이후 수정하지 않는다.
 type PreModelHook func(context.Context, llm.ChatRequest) (llm.ChatRequest, error)
 
-// PostModelHook 은 실제 model 요청을 읽기 전용으로 관찰하고 현재 응답을 처리한다.
+// PostModelHook 함수 타입은 실제 모델 요청을 읽기 전용으로 관찰하고 현재 응답을 처리한다.
 // 반환한 응답은 소유권이 이전되므로 이후 수정하지 않는다.
 type PostModelHook func(context.Context, llm.ChatRequest, llm.ChatResponse) (llm.ChatResponse, error)
 
-// ModelMiddleware 는 model 요청과 정규화된 응답을 순차 처리하는 선택적 hook 묶음이다.
+// ModelMiddleware 구조체는 모델 요청과 정규화된 응답을 등록 순서대로 처리하는 선택적 hook 묶음이다.
 type ModelMiddleware struct {
 	Name      string
 	PreModel  PreModelHook

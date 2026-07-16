@@ -1,3 +1,4 @@
+// Package agent는 LLM 판단과 Tool 실행을 반복하는 단일 Agent 실행 흐름을 제공한다.
 package agent
 
 import (
@@ -11,7 +12,7 @@ import (
 	"github.com/zipkero/agent-runtime/internal/tool"
 )
 
-// Status 는 Agent run의 현재 또는 종료 상태를 표현한다.
+// Status 타입은 Agent 실행의 현재 또는 종료 상태를 표현한다.
 type Status string
 
 const (
@@ -22,7 +23,7 @@ const (
 	StatusError       Status = "error"
 )
 
-// TraceAction 은 Agent run 중 관찰 가능한 주요 상태 전이를 표현한다.
+// TraceAction 타입은 Agent 실행 중 관찰 가능한 주요 상태 전이를 표현한다.
 type TraceAction string
 
 const (
@@ -49,7 +50,10 @@ const (
 	limitRunDeadline     = "run_deadline"
 )
 
-// Options 는 Agent run 실행에 필요한 provider-neutral 의존성과 정책이다.
+// Options 구조체는 Agent 실행에 필요한 공급자 중립 의존성과 제한 정책이다.
+// ToolTimeout, MaxToolCalls, MaxToolResultBytes가 0이면 Runtime 기본값을 사용한다.
+// MaxToolCalls 값과 MaxToolResultBytes 값은 음수를 허용하지 않는다.
+// MaxSteps 값이 0 이하이면 LLM을 호출하지 않고 StatusMaxSteps 상태로 종료한다.
 type Options struct {
 	Client             llm.LLMClient
 	Model              string
@@ -65,7 +69,7 @@ type modelCallOptions struct {
 	middleware []ModelMiddleware
 }
 
-// Agent 는 메시지 상태를 소유하며 LLM 판단을 진행하는 Runtime 실행 객체다.
+// Agent 구조체는 메시지 상태를 소유하며 LLM 판단을 진행하는 Runtime 실행 객체다.
 type Agent struct {
 	client             llm.LLMClient
 	model              string
@@ -78,7 +82,7 @@ type Agent struct {
 	middleware         []ModelMiddleware
 }
 
-// AgentState 는 호출자가 run 이후 메시지 누적과 종료 상태를 확인하는 값이다.
+// AgentState 구조체는 호출자가 실행 이후 메시지 누적과 종료 상태를 확인하는 값이다.
 type AgentState struct {
 	Messages    []message.Message
 	Step        int
@@ -89,7 +93,7 @@ type AgentState struct {
 	Trace       []TraceEvent
 }
 
-// TraceEvent 는 Agent run 중 메모리에 남기는 테스트 가능한 관찰 기록이다.
+// TraceEvent 구조체는 Agent 실행 중 메모리에 남기는 관찰 기록이다.
 type TraceEvent struct {
 	Step       int
 	Action     TraceAction
@@ -100,6 +104,7 @@ type TraceEvent struct {
 	Error      error
 }
 
+// New 함수는 주입된 의존성과 실행 제한으로 Agent를 만든다.
 func New(opts Options) (*Agent, error) {
 	return newAgent(opts, modelCallOptions{})
 }
@@ -143,6 +148,8 @@ func newAgent(opts Options, modelCall modelCallOptions) (*Agent, error) {
 	}, nil
 }
 
+// Run 메서드는 입력을 사용자 메시지로 추가하고 종료 조건에 도달할 때까지 LLM 판단과 Tool 실행을 반복한다.
+// 실행 오류와 제한 초과는 반환 오류 대신 AgentState의 Status와 LastError에 보존한다.
 func (a *Agent) Run(ctx context.Context, input string) AgentState {
 	state := AgentState{
 		Status: StatusRunning,
@@ -262,6 +269,7 @@ func (a *Agent) toolSchemas() []message.ToolSchema {
 	return a.tools.Schemas()
 }
 
+// cloneMessages 함수는 middleware가 내부 대화 상태를 별칭으로 보관하거나 수정하지 못하도록 요청 소유권을 분리한다.
 func cloneMessages(messages []message.Message) []message.Message {
 	cloned := make([]message.Message, len(messages))
 	for i, item := range messages {
@@ -284,6 +292,7 @@ func cloneMessage(item message.Message) message.Message {
 	return cloned
 }
 
+// executeToolCall 메서드는 Tool 자체의 실패를 오류 메시지로 바꿔 다음 LLM 판단을 계속하고, 실행 전체 제한만 상위로 반환한다.
 func (a *Agent) executeToolCall(ctx context.Context, state *AgentState, call message.ToolCall) (message.Message, error) {
 	state.recordTool(TraceActionToolCall, call, false, nil)
 

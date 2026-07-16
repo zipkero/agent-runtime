@@ -9,7 +9,8 @@ import (
 	"github.com/zipkero/agent-runtime/internal/tool"
 )
 
-// RunnerOptions 는 Single Agent run에 필요한 provider-neutral 의존성과 실행 제한이다.
+// RunnerOptions 구조체는 단일 Agent 실행에 필요한 공급자 중립 의존성과 실행 제한이다.
+// ModelTimeout 값이 0이면 공급자 호출에 별도 제한 시간을 추가하지 않고, 나머지 기본값은 Options 구조체와 동일하다.
 type RunnerOptions struct {
 	Client             llm.LLMClient
 	Model              string
@@ -22,17 +23,17 @@ type RunnerOptions struct {
 	Middleware         []ModelMiddleware
 }
 
-// RunnerResult 는 Runner가 실행한 Agent의 최종 상태와 결과를 보존한다.
+// RunnerResult 구조체는 Runner가 실행한 Agent의 최종 상태와 결과를 보존한다.
 type RunnerResult struct {
 	State AgentState
 }
 
-// Runner 는 실행 의존성을 조립하고 기존 Agent loop를 호출하는 상위 실행 경계다.
+// Runner 구조체는 실행 의존성을 조립하고 Agent 반복 흐름을 호출하는 상위 실행 경계다.
 type Runner struct {
 	agent *Agent
 }
 
-// NewRunner 는 주입된 실행 옵션으로 재사용 가능한 Single Agent Runner를 생성한다.
+// NewRunner 함수는 주입된 실행 옵션으로 재사용 가능한 단일 Agent Runner를 생성한다.
 func NewRunner(opts RunnerOptions) (*Runner, error) {
 	if opts.Client == nil {
 		return nil, errors.New("agent runner client is required")
@@ -60,7 +61,7 @@ func NewRunner(opts RunnerOptions) (*Runner, error) {
 	return &Runner{agent: agent}, nil
 }
 
-// Run 은 사용자 입력 하나를 기존 Agent loop로 실행한다.
+// Run 메서드는 사용자 입력 하나를 Agent 반복 흐름으로 실행한다.
 func (r *Runner) Run(ctx context.Context, input string) RunnerResult {
 	return RunnerResult{State: r.agent.Run(ctx, input)}
 }

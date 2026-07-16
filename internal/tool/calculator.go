@@ -9,8 +9,10 @@ import (
 	"github.com/zipkero/agent-runtime/internal/message"
 )
 
+// Calculator 구조체는 두 피연산자에 기본 사칙연산을 적용하는 내장 Tool이다.
 type Calculator struct{}
 
+// NewCalculator 함수는 상태를 갖지 않는 Calculator를 만든다.
 func NewCalculator() Calculator {
 	return Calculator{}
 }

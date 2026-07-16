@@ -1,3 +1,4 @@
+// Command agent-runtime은 설정된 LLM 공급자에 단발 프롬프트를 보내는 CLI 진입점이다.
 package main
 
 import (

@@ -13,17 +13,20 @@ import (
 )
 
 const (
+	// DefaultTavilySearchEndpoint 상수는 Tavily 검색 API의 기본 호출 주소다.
 	DefaultTavilySearchEndpoint = "https://api.tavily.com/search"
 
 	defaultWebSearchMaxResults = 5
 	maxWebSearchQueryLength    = 400
 )
 
+// WebSearch 구조체는 Tavily API 응답을 크기가 제한된 Tool 결과로 정규화한다.
 type WebSearch struct {
 	apiKey string
 	client tavilySearchClient
 }
 
+// NewWebSearch 함수는 기본 Tavily 호출 주소와 HTTP 클라이언트를 사용하는 WebSearch를 만든다.
 func NewWebSearch(apiKey string) WebSearch {
 	return newWebSearch(apiKey, newTavilyHTTPClient(DefaultTavilySearchEndpoint, http.DefaultClient))
 }

@@ -11,10 +11,14 @@ import (
 	"github.com/zipkero/agent-runtime/internal/message"
 )
 
+// FileSave 구조체는 허용된 루트 아래에 파일을 저장하는 Tool이다.
+// 필요한 상위 디렉터리는 만들지만, 루트를 벗어나는 경로와 상위 경로의 심볼릭 링크는 거부한다.
+// 기존 파일은 overwrite 인수가 true일 때만 덮어쓴다.
 type FileSave struct {
 	root string
 }
 
+// NewFileSave 함수는 존재하는 디렉터리를 쓰기 루트로 고정한 FileSave를 만든다.
 func NewFileSave(root string) (FileSave, error) {
 	trimmed := strings.TrimSpace(root)
 	if trimmed == "" {
@@ -159,6 +163,7 @@ func (f FileSave) resolveSavePath(raw json.RawMessage) (string, fileSaveArgument
 	return target, arguments, nil
 }
 
+// ensureNoSymlinkPath 함수는 생성된 상위 디렉터리가 심볼릭 링크를 통해 루트 밖을 가리키는 것을 막는다.
 func ensureNoSymlinkPath(root, target string) error {
 	rel, err := filepath.Rel(root, target)
 	if err != nil {

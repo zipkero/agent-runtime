@@ -30,7 +30,7 @@ type claudeClient struct {
 	model      string
 }
 
-// claudeMessageRequest 는 Claude Messages API에 직접 보내는 JSON wire format이다.
+// claudeMessageRequest 구조체는 Claude Messages API에 직접 보내는 JSON 전송 형식이다.
 type claudeMessageRequest struct {
 	Model     string                 `json:"model"`
 	MaxTokens int                    `json:"max_tokens"`
@@ -50,7 +50,7 @@ type claudeRequestMessage struct {
 	Content []claudeRequestContentBlock `json:"content"`
 }
 
-// claudeRequestContentBlock 은 내부 text/tool 표현을 Claude content block으로 옮기는 provider 경계 타입이다.
+// claudeRequestContentBlock 구조체는 내부 텍스트와 Tool 표현을 Claude content block으로 옮기는 공급자 경계 타입이다.
 type claudeRequestContentBlock struct {
 	Type      string          `json:"type"`
 	Text      string          `json:"text,omitempty"`
@@ -90,7 +90,7 @@ type claudeErrorResponse struct {
 	} `json:"error"`
 }
 
-// NewClaudeClient 는 Claude Messages API를 LLMClient contract 뒤에 연결한다.
+// NewClaudeClient 함수는 Claude Messages API를 LLMClient 계약 뒤에 연결한다.
 func NewClaudeClient(cfg ProviderConfig) (LLMClient, error) {
 	return newClaudeClient(cfg, http.DefaultClient, claudeDefaultEndpoint)
 }
@@ -158,7 +158,7 @@ func (c *claudeClient) Chat(ctx context.Context, req ChatRequest) (ChatResponse,
 	return decodeClaudeResponse(decoded), nil
 }
 
-// buildRequest 는 Runtime 메시지를 Claude가 받는 system 필드와 대화 message 배열로 분리한다.
+// buildRequest 메서드는 Runtime 메시지를 Claude가 받는 system 필드와 대화 메시지 배열로 분리한다.
 func (c *claudeClient) buildRequest(req ChatRequest) (claudeMessageRequest, error) {
 	model := strings.TrimSpace(req.Model)
 	if model == "" {
@@ -220,7 +220,7 @@ func claudeTools(schemas []message.ToolSchema) []claudeTool {
 	return tools
 }
 
-// claudeContentBlocks 는 Phase 1 범위에서 text, tool_use, tool_result 표현만 provider 형식으로 보존한다.
+// claudeContentBlocks 함수는 Runtime의 text, tool_use, tool_result 표현을 Claude 형식으로 보존한다.
 func claudeContentBlocks(msg message.Message) []claudeRequestContentBlock {
 	var blocks []claudeRequestContentBlock
 	if msg.Text != "" {
@@ -252,7 +252,7 @@ func claudeContentBlocks(msg message.Message) []claudeRequestContentBlock {
 	return blocks
 }
 
-// decodeClaudeResponse 는 Claude content block 중 Runtime이 이후 단계에서 재사용할 text와 tool_use만 내부 응답으로 옮긴다.
+// decodeClaudeResponse 함수는 Claude content block 중 Runtime이 재사용할 text와 tool_use만 내부 응답으로 옮긴다.
 func decodeClaudeResponse(resp claudeMessageResponse) ChatResponse {
 	var text strings.Builder
 	var toolCalls []message.ToolCall
@@ -287,7 +287,7 @@ func decodeClaudeResponse(resp claudeMessageResponse) ChatResponse {
 	}
 }
 
-// readHTTPError 는 provider 오류 메시지를 보존하되 API key가 섞인 경우 외부 오류에서 제거한다.
+// readHTTPError 메서드는 공급자 오류 메시지를 보존하되 API 키가 섞인 경우 외부 오류에서 제거한다.
 func (c *claudeClient) readHTTPError(resp *http.Response) error {
 	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if err != nil {
@@ -324,7 +324,7 @@ func timeoutError(provider Provider, op string, err error) error {
 	}
 }
 
-// isTimeoutError 는 context deadline과 net/http timeout을 같은 LLM timeout 오류로 분류한다.
+// isTimeoutError 함수는 context deadline과 net/http 제한 시간 초과를 같은 LLM 오류로 분류한다.
 func isTimeoutError(ctx context.Context, err error) bool {
 	if errors.Is(err, context.DeadlineExceeded) {
 		return true

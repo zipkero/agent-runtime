@@ -16,12 +16,15 @@ import (
 
 const defaultCodeExecutionOutputLimit = 64 * 1024
 
+// CodeExecution 구조체는 지정된 루트에서 허용 목록에 있는 Go 명령만 실행하는 Tool이다.
+// 출력과 경로 이동은 제한하지만 운영체제 수준의 보안 격리를 제공하지는 않는다.
 type CodeExecution struct {
 	root        string
 	executable  string
 	outputLimit int
 }
 
+// NewCodeExecution 함수는 시스템의 go 실행 파일과 지정된 작업 루트를 사용하는 CodeExecution을 만든다.
 func NewCodeExecution(root string) (CodeExecution, error) {
 	return newCodeExecution(root, "go", defaultCodeExecutionOutputLimit)
 }
@@ -108,6 +111,7 @@ func (c CodeExecution) Execute(ctx context.Context, args json.RawMessage) (Resul
 	stderr := &limitedOutput{limit: c.outputLimit}
 	cmd := exec.CommandContext(ctx, c.executable, arguments.Args...)
 	cmd.Dir = c.root
+	// 외부 go.work가 작업 루트 밖의 모듈을 실행 범위에 끌어들이지 못하도록 워크스페이스 탐색을 끈다.
 	cmd.Env = append(os.Environ(), "GOWORK=off")
 	cmd.Stdout = stdout
 	cmd.Stderr = stderr
@@ -169,6 +173,7 @@ func decodeCodeExecutionArguments(raw json.RawMessage) (codeExecutionArguments, 
 	return arguments, nil
 }
 
+// validateCodeExecutionArgs 함수는 실행 위치 변경, 루트 밖 경로 접근, go env 영구 변경을 입력 경계에서 차단한다.
 func validateCodeExecutionArgs(args []string) error {
 	if strings.TrimSpace(args[0]) == "" {
 		return ValidationErrorf("arg must not be empty")
@@ -258,6 +263,7 @@ func codeExecutionError(message string, err error) error {
 	}
 }
 
+// limitedOutput 구조체는 프로세스가 계속 실행될 수 있도록 초과 출력을 버리면서 보관 크기만 제한한다.
 type limitedOutput struct {
 	buffer    bytes.Buffer
 	limit     int
@@ -270,6 +276,7 @@ func (o *limitedOutput) Write(p []byte) (int, error) {
 	}
 
 	remaining := o.limit - o.buffer.Len()
+	// 항상 전체 길이를 소비한 것으로 보고해 실행 중인 프로세스에 출력 일부만 처리됐다는 오류를 만들지 않는다.
 	if remaining <= 0 {
 		o.truncated = true
 		return len(p), nil

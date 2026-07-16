@@ -11,10 +11,14 @@ import (
 	"github.com/zipkero/agent-runtime/internal/message"
 )
 
+// FileRead 구조체는 허용된 루트 아래의 일반 파일만 읽는 Tool이다.
+// 절대 경로와 .. 기반 루트 이탈을 거부하며 결과는 DefaultMaxResultBytes를 넘지 않는다.
+// 상위 경로의 심볼릭 링크까지 차단하는 보안 격리는 제공하지 않는다.
 type FileRead struct {
 	root string
 }
 
+// NewFileRead 함수는 존재하는 디렉터리를 읽기 루트로 고정한 FileRead를 만든다.
 func NewFileRead(root string) (FileRead, error) {
 	trimmed := strings.TrimSpace(root)
 	if trimmed == "" {

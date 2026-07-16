@@ -1,3 +1,4 @@
+// Package config는 Runtime 실행 설정을 .env 파일과 환경변수에서 구성한다.
 package config
 
 import (
@@ -9,10 +10,14 @@ import (
 )
 
 const (
+	// DefaultLLMProvider 상수는 공급자가 지정되지 않았을 때 선택하는 기본값이다.
 	DefaultLLMProvider = "ollama"
-	DefaultLLMHost     = "http://localhost:11434"
-	DefaultLLMTimeout  = 30 * time.Second
-	DefaultLogLevel    = "info"
+	// DefaultLLMHost 상수는 로컬 Ollama의 기본 주소다.
+	DefaultLLMHost = "http://localhost:11434"
+	// DefaultLLMTimeout 상수는 LLM 호출에 적용하는 기본 제한 시간이다.
+	DefaultLLMTimeout = 30 * time.Second
+	// DefaultLogLevel 상수는 로그 레벨이 지정되지 않았을 때 사용하는 기본값이다.
+	DefaultLogLevel = "info"
 )
 
 const (
@@ -25,7 +30,7 @@ const (
 	envLogLevel    = "LOG_LEVEL"
 )
 
-// Config 는 Runtime 실행에 필요한 Phase 0 설정값이다.
+// Config 구조체는 Runtime 실행과 외부 공급자 연결에 필요한 설정값이다.
 type Config struct {
 	LLMProvider  string
 	LLMModel     string
@@ -36,12 +41,13 @@ type Config struct {
 	LogLevel     string
 }
 
-// Load 는 현재 작업 디렉터리의 .env와 실제 환경변수를 병합해 설정을 만든다.
+// Load 함수는 현재 작업 디렉터리의 .env와 실제 환경변수를 병합해 설정을 만든다.
 func Load() (Config, error) {
 	return LoadFile(".env")
 }
 
-// LoadFile 은 path의 .env 파일과 실제 환경변수를 병합해 설정을 만든다.
+// LoadFile 함수는 지정한 .env 파일과 실제 환경변수를 병합해 설정을 만든다.
+// 파일이 없으면 빈 설정으로 계속하며, 같은 키는 실제 환경변수가 파일 값을 덮어쓴다.
 func LoadFile(path string) (Config, error) {
 	values, err := readEnvFile(path)
 	if err != nil {
