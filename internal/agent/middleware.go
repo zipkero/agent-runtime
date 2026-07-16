@@ -21,19 +21,22 @@ const (
 type RunnerErrorKind string
 
 const (
-	RunnerErrorKindMiddleware     RunnerErrorKind = "middleware"
-	RunnerErrorKindExecutionLimit RunnerErrorKind = "execution_limit"
+	RunnerErrorKindMiddleware         RunnerErrorKind = "middleware"
+	RunnerErrorKindExecutionLimit     RunnerErrorKind = "execution_limit"
+	RunnerErrorKindIncompleteResponse RunnerErrorKind = "incomplete_response"
 )
 
 // RunnerError 구조체는 Runner 고유 실패 분류와 원인을 함께 보존한다.
 type RunnerError struct {
-	Kind       RunnerErrorKind
-	Stage      MiddlewareStage
-	Middleware string
-	Limit      string
-	Current    int
-	Maximum    int
-	Err        error
+	Kind         RunnerErrorKind
+	Stage        MiddlewareStage
+	Middleware   string
+	Limit        string
+	Current      int
+	Maximum      int
+	FinishReason llm.FinishReason
+	StopReason   string
+	Err          error
 }
 
 func (e *RunnerError) Error() string {
@@ -42,6 +45,14 @@ func (e *RunnerError) Error() string {
 			return fmt.Sprintf("agent runner %s %s: current %d exceeds maximum %d", e.Kind, e.Limit, e.Current, e.Maximum)
 		}
 		return fmt.Sprintf("agent runner %s %s: %v", e.Kind, e.Limit, e.Err)
+	}
+	if e.Kind == RunnerErrorKindIncompleteResponse {
+		return fmt.Sprintf(
+			"agent runner %s: finish reason %q from provider stop reason %q",
+			e.Kind,
+			e.FinishReason,
+			e.StopReason,
+		)
 	}
 	return fmt.Sprintf("agent runner %s %s middleware %q: %v", e.Kind, e.Stage, e.Middleware, e.Err)
 }
@@ -145,5 +156,13 @@ func executionLimitError(limit string, current, maximum int, err error) error {
 		Current: current,
 		Maximum: maximum,
 		Err:     err,
+	}
+}
+
+func incompleteResponseError(finishReason llm.FinishReason, stopReason string) error {
+	return &RunnerError{
+		Kind:         RunnerErrorKindIncompleteResponse,
+		FinishReason: finishReason,
+		StopReason:   stopReason,
 	}
 }

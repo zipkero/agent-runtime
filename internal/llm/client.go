@@ -20,13 +20,27 @@ type ChatRequest struct {
 	Tools    []message.ToolSchema
 }
 
+// FinishReason 타입은 공급자별 완료 사유를 Runtime이 상태 전이에 사용하는 공통 값으로 정규화한다.
+type FinishReason string
+
+const (
+	FinishReasonComplete    FinishReason = "complete"
+	FinishReasonToolCall    FinishReason = "tool_call"
+	FinishReasonLengthLimit FinishReason = "length_limit"
+	FinishReasonBlocked     FinishReason = "blocked"
+	FinishReasonUnknown     FinishReason = "unknown"
+)
+
 // ChatResponse 구조체는 공급자 응답을 Runtime 내부 메시지 형태로 정규화한 결과다.
+// FinishReason은 Runtime 상태 전이용 공통 값이고 StopReason은 진단을 위한 공급자 원문이다.
+// 기존 custom LLMClient는 FinishReason을 비워 둘 수 있으며 Agent는 이를 정상 완료로 해석한다.
 type ChatResponse struct {
-	Provider   Provider
-	Model      string
-	Message    message.Message
-	StopReason string
-	Usage      Usage
+	Provider     Provider
+	Model        string
+	Message      message.Message
+	FinishReason FinishReason
+	StopReason   string
+	Usage        Usage
 }
 
 // Usage 구조체는 한 번의 LLM 호출에서 소비한 토큰 수를 보존한다.

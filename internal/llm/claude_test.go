@@ -130,8 +130,35 @@ func TestClaudeClientSendsMessagesHeadersAndDecodesResponse(t *testing.T) {
 	if resp.StopReason != "tool_use" {
 		t.Fatalf("StopReason = %q, want tool_use", resp.StopReason)
 	}
+	if resp.FinishReason != FinishReasonToolCall {
+		t.Fatalf("FinishReason = %q, want %q", resp.FinishReason, FinishReasonToolCall)
+	}
 	if resp.Usage.InputTokens != 7 || resp.Usage.OutputTokens != 11 || resp.Usage.TotalTokens != 18 {
 		t.Fatalf("Usage = %+v, want 7/11/18", resp.Usage)
+	}
+}
+
+func TestClaudeFinishReasonNormalization(t *testing.T) {
+	tests := []struct {
+		stopReason string
+		want       FinishReason
+	}{
+		{stopReason: "end_turn", want: FinishReasonComplete},
+		{stopReason: "stop_sequence", want: FinishReasonComplete},
+		{stopReason: "tool_use", want: FinishReasonToolCall},
+		{stopReason: "max_tokens", want: FinishReasonLengthLimit},
+		{stopReason: "refusal", want: FinishReasonBlocked},
+		{stopReason: "pause_turn", want: FinishReasonUnknown},
+		{stopReason: "future_reason", want: FinishReasonUnknown},
+		{want: FinishReasonUnknown},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.stopReason, func(t *testing.T) {
+			if got := normalizeClaudeFinishReason(tt.stopReason); got != tt.want {
+				t.Fatalf("normalizeClaudeFinishReason(%q) = %q, want %q", tt.stopReason, got, tt.want)
+			}
+		})
 	}
 }
 

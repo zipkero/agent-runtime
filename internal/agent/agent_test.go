@@ -238,6 +238,137 @@ func TestRunStoresUserMessageAndFinalAssistantResponse(t *testing.T) {
 	})
 }
 
+func TestRunHandlesNormalizedFinishReasons(t *testing.T) {
+	t.Run("explicit complete", func(t *testing.T) {
+		client := &stubClient{response: llm.ChatResponse{
+			Message:      message.Assistant("complete answer"),
+			FinishReason: llm.FinishReasonComplete,
+			StopReason:   "end_turn",
+		}}
+		agent, err := New(Options{Client: client, MaxSteps: 1})
+		if err != nil {
+			t.Fatalf("New() error = %v", err)
+		}
+
+		state := agent.Run(context.Background(), "hello")
+
+		if state.Status != StatusFinal || state.FinalAnswer != "complete answer" || state.LastError != nil {
+			t.Fatalf("state = %+v, want explicit complete final", state)
+		}
+	})
+
+	t.Run("empty reason compatibility", func(t *testing.T) {
+		client := &stubClient{response: llm.ChatResponse{Message: message.Assistant("legacy answer")}}
+		agent, err := New(Options{Client: client, MaxSteps: 1})
+		if err != nil {
+			t.Fatalf("New() error = %v", err)
+		}
+
+		state := agent.Run(context.Background(), "hello")
+
+		if state.Status != StatusFinal || state.FinalAnswer != "legacy answer" || state.LastError != nil {
+			t.Fatalf("state = %+v, want empty finish reason compatibility", state)
+		}
+	})
+
+	t.Run("tool call", func(t *testing.T) {
+		call := message.ToolCall{ID: "call-1", Name: "lookup", Arguments: json.RawMessage(`{}`)}
+		client := &stubClient{responses: []llm.ChatResponse{
+			{
+				Message:      message.Assistant("using tool", call),
+				FinishReason: llm.FinishReasonToolCall,
+				StopReason:   "tool_use",
+			},
+			{
+				Message:      message.Assistant("done"),
+				FinishReason: llm.FinishReasonComplete,
+				StopReason:   "end_turn",
+			},
+		}}
+		lookupTool := &stubTool{name: "lookup", result: runtimetool.Result{Content: "result"}}
+		registry := runtimetool.NewRegistry()
+		if err := registry.Register(lookupTool); err != nil {
+			t.Fatalf("Register() error = %v", err)
+		}
+		agent, err := New(Options{Client: client, MaxSteps: 2, Tools: registry})
+		if err != nil {
+			t.Fatalf("New() error = %v", err)
+		}
+
+		state := agent.Run(context.Background(), "use tool")
+
+		if state.Status != StatusFinal || state.FinalAnswer != "done" || lookupTool.calls != 1 {
+			t.Fatalf("state/tool calls = %+v/%d, want normalized tool loop", state, lookupTool.calls)
+		}
+	})
+}
+
+func TestRunRejectsIncompleteResponses(t *testing.T) {
+	tests := []struct {
+		name         string
+		finishReason llm.FinishReason
+		stopReason   string
+		withToolCall bool
+	}{
+		{name: "length limit", finishReason: llm.FinishReasonLengthLimit, stopReason: "max_tokens"},
+		{name: "blocked", finishReason: llm.FinishReasonBlocked, stopReason: "refusal"},
+		{name: "unknown", finishReason: llm.FinishReasonUnknown, stopReason: "future_reason"},
+		{name: "length limit with tool call", finishReason: llm.FinishReasonLengthLimit, stopReason: "length", withToolCall: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var calls []message.ToolCall
+			if tt.withToolCall {
+				calls = append(calls, message.ToolCall{ID: "call-1", Name: "lookup", Arguments: json.RawMessage(`{}`)})
+			}
+			client := &stubClient{response: llm.ChatResponse{
+				Message:      message.Assistant("partial response", calls...),
+				FinishReason: tt.finishReason,
+				StopReason:   tt.stopReason,
+			}}
+			lookupTool := &stubTool{name: "lookup", result: runtimetool.Result{Content: "must not run"}}
+			registry := runtimetool.NewRegistry()
+			if err := registry.Register(lookupTool); err != nil {
+				t.Fatalf("Register() error = %v", err)
+			}
+			agent, err := New(Options{Client: client, MaxSteps: 2, Tools: registry})
+			if err != nil {
+				t.Fatalf("New() error = %v", err)
+			}
+
+			state := agent.Run(context.Background(), "hello")
+
+			var incompleteErr *RunnerError
+			if state.Status != StatusError || state.FinalAnswer != "" ||
+				!errors.As(state.LastError, &incompleteErr) ||
+				incompleteErr.Kind != RunnerErrorKindIncompleteResponse ||
+				incompleteErr.FinishReason != tt.finishReason ||
+				incompleteErr.StopReason != tt.stopReason {
+				t.Fatalf("state = %+v, want incomplete response error", state)
+			}
+			if !IsRunnerErrorKind(state.LastError, RunnerErrorKindIncompleteResponse) {
+				t.Fatal("IsRunnerErrorKind() = false, want incomplete response")
+			}
+			if client.calls != 1 || lookupTool.calls != 0 {
+				t.Fatalf("client/tool calls = %d/%d, want 1/0", client.calls, lookupTool.calls)
+			}
+			if len(state.Messages) != 2 || state.Messages[1].Text != "partial response" {
+				t.Fatalf("Messages = %+v, want preserved assistant response", state.Messages)
+			}
+			if tt.withToolCall && len(state.Messages[1].ToolCalls) != 1 {
+				t.Fatalf("assistant ToolCalls = %+v, want preserved diagnostic tool call", state.Messages[1].ToolCalls)
+			}
+			assertTrace(t, state.Trace, []expectedTrace{
+				{step: 0, action: TraceActionUserMessage, status: StatusRunning},
+				{step: 1, action: TraceActionLLMRequest, status: StatusRunning},
+				{step: 1, action: TraceActionLLMResponse, status: StatusRunning},
+				{step: 1, action: TraceActionIncompleteResponse, status: StatusError, wantErr: state.LastError},
+			})
+		})
+	}
+}
+
 // TestRunStopsWithNeedsActionWhenAssistantRequestsTool 는 tool 실행 없는 대기 상태 contract를 고정한다.
 func TestRunStopsWithNeedsActionWhenAssistantRequestsTool(t *testing.T) {
 	toolCall := message.ToolCall{

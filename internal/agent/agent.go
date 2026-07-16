@@ -27,19 +27,20 @@ const (
 type TraceAction string
 
 const (
-	TraceActionUserMessage     TraceAction = "user_message"
-	TraceActionLLMRequest      TraceAction = "llm_request"
-	TraceActionLLMResponse     TraceAction = "llm_response"
-	TraceActionFinal           TraceAction = "final"
-	TraceActionNeedsAction     TraceAction = "needs_action"
-	TraceActionMaxSteps        TraceAction = "max_steps"
-	TraceActionLLMError        TraceAction = "llm_error"
-	TraceActionMiddlewareError TraceAction = "middleware_error"
-	TraceActionToolCall        TraceAction = "tool_call"
-	TraceActionToolResult      TraceAction = "tool_result"
-	TraceActionToolError       TraceAction = "tool_error"
-	TraceActionToolTimeout     TraceAction = "tool_timeout"
-	TraceActionExecutionLimit  TraceAction = "execution_limit"
+	TraceActionUserMessage        TraceAction = "user_message"
+	TraceActionLLMRequest         TraceAction = "llm_request"
+	TraceActionLLMResponse        TraceAction = "llm_response"
+	TraceActionFinal              TraceAction = "final"
+	TraceActionNeedsAction        TraceAction = "needs_action"
+	TraceActionMaxSteps           TraceAction = "max_steps"
+	TraceActionLLMError           TraceAction = "llm_error"
+	TraceActionMiddlewareError    TraceAction = "middleware_error"
+	TraceActionToolCall           TraceAction = "tool_call"
+	TraceActionToolResult         TraceAction = "tool_result"
+	TraceActionToolError          TraceAction = "tool_error"
+	TraceActionToolTimeout        TraceAction = "tool_timeout"
+	TraceActionExecutionLimit     TraceAction = "execution_limit"
+	TraceActionIncompleteResponse TraceAction = "incomplete_response"
 )
 
 const (
@@ -224,6 +225,11 @@ func (a *Agent) Run(ctx context.Context, input string) AgentState {
 		state.Messages = append(state.Messages, finalResponse.Message)
 		state.ToolCalls = append([]message.ToolCall(nil), finalResponse.Message.ToolCalls...)
 		state.record(TraceActionLLMResponse, nil)
+		finishReason := effectiveFinishReason(finalResponse.FinishReason)
+		if finishReason != llm.FinishReasonComplete && finishReason != llm.FinishReasonToolCall {
+			state.stopIncompleteResponse(incompleteResponseError(finishReason, finalResponse.StopReason))
+			return state
+		}
 		if len(state.ToolCalls) == 0 {
 			state.Status = StatusFinal
 			state.FinalAnswer = finalResponse.Message.Text
@@ -361,6 +367,14 @@ func executionLimitFromContext(ctx context.Context) error {
 	return nil
 }
 
+// effectiveFinishReason 함수는 완료 사유 필드가 없던 기존 custom client 응답을 정상 완료로 해석한다.
+func effectiveFinishReason(reason llm.FinishReason) llm.FinishReason {
+	if reason == "" {
+		return llm.FinishReasonComplete
+	}
+	return reason
+}
+
 func toolErrorMessage(call message.ToolCall, content string) message.Message {
 	return message.Tool(message.ToolResult{
 		ToolCallID: call.ID,
@@ -383,6 +397,13 @@ func (s *AgentState) stopExecutionLimit(err error) {
 	s.Status = StatusError
 	s.LastError = err
 	s.record(TraceActionExecutionLimit, err)
+}
+
+func (s *AgentState) stopIncompleteResponse(err error) {
+	s.Status = StatusError
+	s.FinalAnswer = ""
+	s.LastError = err
+	s.record(TraceActionIncompleteResponse, err)
 }
 
 func (s *AgentState) recordTool(action TraceAction, call message.ToolCall, isError bool, err error) {

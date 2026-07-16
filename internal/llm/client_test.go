@@ -18,8 +18,9 @@ func (c stubClient) Chat(context.Context, ChatRequest) (ChatResponse, error) {
 // TestChatResponsePreservesAssistantToolCalls 는 ChatResponse가 provider 응답에서 온 assistant tool call을 내부 메시지에 보존하는지 확인한다.
 func TestChatResponsePreservesAssistantToolCalls(t *testing.T) {
 	resp := ChatResponse{
-		Provider: ProviderClaude,
-		Model:    "claude-test",
+		Provider:     ProviderClaude,
+		Model:        "claude-test",
+		FinishReason: FinishReasonToolCall,
 		Message: message.Assistant("tool requested", message.ToolCall{
 			ID:   "call-1",
 			Name: "search",
@@ -38,6 +39,9 @@ func TestChatResponsePreservesAssistantToolCalls(t *testing.T) {
 	}
 	if resp.StopReason != "tool_use" {
 		t.Fatalf("StopReason = %q, want tool_use", resp.StopReason)
+	}
+	if resp.FinishReason != FinishReasonToolCall {
+		t.Fatalf("FinishReason = %q, want %q", resp.FinishReason, FinishReasonToolCall)
 	}
 }
 

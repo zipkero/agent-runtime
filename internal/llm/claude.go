@@ -275,15 +275,31 @@ func decodeClaudeResponse(resp claudeMessageResponse) ChatResponse {
 	}
 
 	return ChatResponse{
-		Provider:   ProviderClaude,
-		Model:      resp.Model,
-		Message:    message.Assistant(text.String(), toolCalls...),
-		StopReason: resp.StopReason,
+		Provider:     ProviderClaude,
+		Model:        resp.Model,
+		Message:      message.Assistant(text.String(), toolCalls...),
+		FinishReason: normalizeClaudeFinishReason(resp.StopReason),
+		StopReason:   resp.StopReason,
 		Usage: Usage{
 			InputTokens:  resp.Usage.InputTokens,
 			OutputTokens: resp.Usage.OutputTokens,
 			TotalTokens:  resp.Usage.InputTokens + resp.Usage.OutputTokens,
 		},
+	}
+}
+
+func normalizeClaudeFinishReason(stopReason string) FinishReason {
+	switch strings.TrimSpace(stopReason) {
+	case "end_turn", "stop_sequence":
+		return FinishReasonComplete
+	case "tool_use":
+		return FinishReasonToolCall
+	case "max_tokens":
+		return FinishReasonLengthLimit
+	case "refusal":
+		return FinishReasonBlocked
+	default:
+		return FinishReasonUnknown
 	}
 }
 

@@ -58,7 +58,7 @@
   - 참조: SPEC §5.1, SPEC §5.2, SPEC §5.10, SPEC §5.11, SPEC §5.14, ANALYSIS §1, ANALYSIS §2, ANALYSIS §3,
     ANALYSIS §5.10
 
-- [ ] task-008: Provider 완료 사유와 Agent 종료 상태 정규화
+- [x] task-008: Provider 완료 사유와 Agent 종료 상태 정규화
   - 목적: 길이 제한, 차단, 알 수 없는 provider 종료를 완성된 final 응답으로 숨기지 않고 호출자가 불완전 응답으로
     구분한다.
   - 접근: raw `StopReason`을 보존하면서 `complete`, `tool_call`, `length_limit`, `blocked`, `unknown`의 provider-neutral

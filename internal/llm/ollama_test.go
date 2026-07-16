@@ -135,8 +135,42 @@ func TestOllamaClientSendsChatRequestAndDecodesResponse(t *testing.T) {
 	if resp.StopReason != "stop" {
 		t.Fatalf("StopReason = %q, want stop", resp.StopReason)
 	}
+	if resp.FinishReason != FinishReasonToolCall {
+		t.Fatalf("FinishReason = %q, want %q", resp.FinishReason, FinishReasonToolCall)
+	}
 	if resp.Usage.InputTokens != 5 || resp.Usage.OutputTokens != 13 || resp.Usage.TotalTokens != 18 {
 		t.Fatalf("Usage = %+v, want 5/13/18", resp.Usage)
+	}
+}
+
+func TestOllamaFinishReasonNormalization(t *testing.T) {
+	tests := []struct {
+		name         string
+		doneReason   string
+		hasToolCalls bool
+		want         FinishReason
+	}{
+		{name: "complete", doneReason: "stop", want: FinishReasonComplete},
+		{name: "tool call", doneReason: "stop", hasToolCalls: true, want: FinishReasonToolCall},
+		{name: "length", doneReason: "length", want: FinishReasonLengthLimit},
+		{name: "length with tool call", doneReason: "length", hasToolCalls: true, want: FinishReasonLengthLimit},
+		{name: "load", doneReason: "load", want: FinishReasonUnknown},
+		{name: "unload", doneReason: "unload", want: FinishReasonUnknown},
+		{name: "empty", want: FinishReasonUnknown},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := normalizeOllamaFinishReason(tt.doneReason, tt.hasToolCalls); got != tt.want {
+				t.Fatalf(
+					"normalizeOllamaFinishReason(%q, %v) = %q, want %q",
+					tt.doneReason,
+					tt.hasToolCalls,
+					got,
+					tt.want,
+				)
+			}
+		})
 	}
 }
 

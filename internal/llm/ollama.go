@@ -246,15 +246,30 @@ func decodeOllamaResponse(resp ollamaChatResponse) ChatResponse {
 	}
 
 	return ChatResponse{
-		Provider:   ProviderOllama,
-		Model:      resp.Model,
-		Message:    message.Assistant(resp.Message.Content, toolCalls...),
-		StopReason: resp.DoneReason,
+		Provider:     ProviderOllama,
+		Model:        resp.Model,
+		Message:      message.Assistant(resp.Message.Content, toolCalls...),
+		FinishReason: normalizeOllamaFinishReason(resp.DoneReason, len(toolCalls) > 0),
+		StopReason:   resp.DoneReason,
 		Usage: Usage{
 			InputTokens:  resp.PromptEvalCount,
 			OutputTokens: resp.EvalCount,
 			TotalTokens:  resp.PromptEvalCount + resp.EvalCount,
 		},
+	}
+}
+
+func normalizeOllamaFinishReason(doneReason string, hasToolCalls bool) FinishReason {
+	switch strings.TrimSpace(doneReason) {
+	case "stop":
+		if hasToolCalls {
+			return FinishReasonToolCall
+		}
+		return FinishReasonComplete
+	case "length":
+		return FinishReasonLengthLimit
+	default:
+		return FinishReasonUnknown
 	}
 }
 
