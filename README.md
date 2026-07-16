@@ -25,6 +25,7 @@ A2A 기반 remote 실행으로 동일하게 다루는 Orchestrator 기반 Multi-
 * LLM 기반 Agent의 의사결정 구조 이해
 * Agent Loop (tool-use 반복 판단) 구현
 * Tool Calling Runtime 구현
+* inline/process-backed Tool Execution Backend 구현
 * Single Agent 구현 (Web Search / File / Code Tool 포함)
 * RAG Runtime 구현
 * Memory Runtime (단기 / 장기) 구현
@@ -44,7 +45,7 @@ A2A 기반 remote 실행으로 동일하게 다루는 Orchestrator 기반 Multi-
 다음은 Runtime의 본체로, 라이브러리에 기대지 않고 직접 구현합니다.
 
 * Agent Loop (LLM 호출 → tool 실행 → 반복 → 종료 판단)
-* Tool Calling Runtime (registry / schema / 검증 / 실행 / timeout)
+* Tool Calling Runtime (registry / schema / 검증 / 실행 / timeout / process 수명 관리)
 * Memory Runtime (단기 / 장기 / trimming / summary)
 * Multi-Agent 협력 (Routing / Orchestrator-Workers)
 * Orchestrator
@@ -408,6 +409,10 @@ Agent Runtime에는 반드시 제한이 필요합니다.
 * output size limit
 * allowed tools
 
+In-process Tool은 context 기반 cooperative cancellation을 따른다. Phase 4.4의 process-backed Tool은 timeout 시 cancel,
+grace period, 필요할 때 kill, wait 순서로 실제 실행 종료를 확인한 뒤 다음 상태로 전이한다. Remote Tool은 로컬 요청
+취소와 늦게 도착한 결과 폐기를 보장하지만 원격 서버의 실행 종료까지 강제하지 않는다.
+
 ### Trace를 남긴다
 
 Agent는 실행 과정이 중요합니다.
@@ -437,6 +442,7 @@ trace 구조 자체는 Phase 2에서 한 번 세우고 이후엔 같은 구조�
 * LLM Client Abstraction
 * Message Model
 * Tool Calling Runtime
+* Tool Execution Backend
 * Agent Loop
 * Single Agent Runtime
 * RAG Runtime
@@ -466,7 +472,8 @@ Runtime을 실제로 운영(외부 API 호출·비용 발생)하는 순간 필�
 * 비용·토큰 예산 제어 (상한 / 차단 / 쿼터)
 * 외부 호출 전반의 재시도·백오프·서킷브레이커 (LLM / 임베딩 / 검색 / DB)
 * 시크릿 관리 (`.env` 너머 Vault·KMS, 키 로테이션)
-* 보안 격리·위협모델 (Code Execution Tool 샌드박싱, 프롬프트 인젝션 대응)
+* 보안 sandbox·위협모델
+  (Code Execution Tool의 filesystem·network·syscall·CPU·memory 격리, 프롬프트 인젝션 대응)
 * DB 스키마 마이그레이션·백업/복구
 * CI/CD 파이프라인
 

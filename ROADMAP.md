@@ -27,7 +27,7 @@ Runtime 본체는 직접 만들고, 외부 연결(LLM·임베딩·웹 검색·�
 [x] Phase 1  LLM Client          (Claude + Ollama 로컬 provider)
 [x] Phase 2  Agent Loop
 [x] Phase 3  Tool Calling Runtime
-[ ] Phase 4  Single Agent Runtime (4.1 Tool 묶음 / 4.2 실행 구조 / 4.3 Streaming)
+[ ] Phase 4  Single Agent Runtime (4.1 Tool 묶음 / 4.2 실행 구조 / 4.3 Streaming / 4.4 Tool 실행 backend)
 [ ] Phase 5  RAG Runtime          (5.1 인덱싱 / 5.2 검색·활용)
 [ ] Phase 6  Memory Runtime       (6.1 단기 메모리 / 6.2 장기 메모리 & Tool)
 [ ] Phase 7  Multi-Agent Runtime  (7.1 Worker·Routing / 7.2 Orchestrator-Workers / 7.3 구체 Worker)
@@ -214,8 +214,9 @@ Tool Calling이 가능한 Single Agent를 구현한다.
 
 ### 구현 범위 (하위 분할)
 
-이 Phase는 이질적인 Tool과 Agent 실행 구조가 섞여 있어 feature-dir와 implement 사이클을 세 갈래로 나눴다.
-소수점 번호는 4.1 → 4.2 → 4.3 순서의 선행 의존을 뜻한다.
+이 Phase는 이질적인 Tool, Agent 실행 구조, streaming, Tool 실행 격리를 분리하기 위해 feature-dir와 implement 사이클을
+네 갈래로 나눴다. 소수점 번호는 4.1 → 4.2 → 4.3 → 4.4 순서의 진행 단위를 뜻한다. 4.4는 4.2의 Tool 실행 수명
+계약 위에 세우되, 기존 번호와 문서 참조를 유지하기 위해 4.3 이후에 진행한다.
 
 #### Phase 4.1 — Tool 묶음
 
@@ -238,11 +239,27 @@ Tool Calling이 가능한 Single Agent를 구현한다.
 * streaming 완료 후 final response 조립
 * Structured Output final 검증과 streaming 관계 정리
 
+#### Phase 4.4 — Tool Execution Backend (4.2 기반, 4.3 이후 진행)
+
+* Agent의 Tool 호출 판단과 실제 실행 방식을 분리하는 Tool execution backend
+* 기존 in-process Tool의 context 기반 cooperative cancellation을 유지하는 inline executor
+* 강제 종료가 필요한 Runtime 소유 Tool을 위한 process-backed executor
+* 실행 요청 ID, Tool 이름, arguments, deadline, result를 전달하는 직렬화 가능한 실행 envelope
+* timeout 시 cancel 요청, grace period, process kill, process 종료 회수
+* Tool 오류, timeout, Tool process crash의 구분과 trace 기록
+* caller deadline과 Tool result 크기의 execution backend 경계 재검증
+
+Phase 4.4의 process-backed executor는 Runtime이 소유한 Tool process의 실행 수명과 강제 종료를 다루며 보안 sandbox를
+보장하지 않는다. Filesystem·network·syscall·CPU·memory 격리와 프롬프트 인젝션 방어는 production 확장 과제로
+유지한다. 초기 범위는 일회성 process를 기준으로 하며 worker pool, process 재사용, 분산 실행은 포함하지 않는다.
+Remote Tool은 로컬 요청 취소와 늦게 도착한 결과 폐기까지만 보장하고 원격 서버의 실제 실행 종료는 강제하지 않는다.
+
 ### 주요 패키지
 
 ```text
 internal/agent
 internal/tool
+internal/toolexec
 ```
 
 ### 학습 포인트
@@ -251,6 +268,8 @@ internal/tool
 * Tool이 많아질수록 Tool schema와 routing 품질이 중요해진다.
 * Code Execution Tool은 강력하지만 보안 위험이 크므로 제한이 필요하다.
 * model 호출 전후를 가로채는 middleware 훅으로 횡단 관심사를 분리할 수 있다.
+* context는 in-process Tool에 취소를 요청하지만 실행을 강제 종료하지는 않는다.
+* Tool process와 Multi-Agent의 `WorkerAgent`는 각각 실행 격리와 역할 분담을 책임하는 서로 다른 경계다.
 
 ### 완료 기준
 
@@ -259,6 +278,11 @@ internal/tool
 * Agent가 제한된 Code Execution Tool을 호출할 수 있다.
 * Structured Output을 파싱할 수 있다.
 * Streaming mode에서 model text chunk를 순차적으로 확인할 수 있다.
+* 호출자는 Tool별로 inline 또는 process-backed 실행 방식을 선택할 수 있다.
+* 기존 inline Tool은 cooperative cancellation과 결과 전달 동작을 유지한다.
+* process-backed Tool이 context를 무시해도 timeout 뒤에는 process가 종료·회수된다.
+* Tool timeout과 Tool process crash는 일반 Tool 오류와 구분되어 result와 trace에 기록된다.
+* Tool process가 종료되기 전에는 Agent가 다음 model 호출이나 종료 상태로 전이하지 않는다.
 
 ---
 
@@ -636,6 +660,7 @@ User Request
     04.1 Tool 묶음
     04.2 Agent 실행 구조
     04.3 Streaming Agent Response
+    04.4 Tool Execution Backend
 05. RAG Runtime                                 [ ]
     05.1 인덱싱 파이프라인
     05.2 검색·활용
@@ -664,7 +689,7 @@ User Request
 | Phase 1  | `internal/llm`, `internal/message`           |
 | Phase 2  | `internal/agent`                             |
 | Phase 3  | `internal/tool`                              |
-| Phase 4  | `internal/agent`, `internal/tool`            |
+| Phase 4  | `internal/agent`, `internal/tool`, `internal/toolexec` |
 | Phase 5  | `internal/rag`                               |
 | Phase 6  | `internal/memory`                            |
 | Phase 7  | `internal/multiagent`                        |
