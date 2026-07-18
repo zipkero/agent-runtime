@@ -110,6 +110,9 @@ func build(values map[string]string) (Config, error) {
 	if err != nil {
 		return Config{}, fmt.Errorf("%s: %w", envLLMTimeout, err)
 	}
+	if timeout <= 0 {
+		return Config{}, fmt.Errorf("%s: duration must be positive", envLLMTimeout)
+	}
 
 	return Config{
 		LLMProvider:  stringValue(values[envLLMProvider], DefaultLLMProvider),

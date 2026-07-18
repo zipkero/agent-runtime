@@ -53,7 +53,7 @@ const (
 
 // Options 구조체는 Agent 실행에 필요한 공급자 중립 의존성과 제한 정책이다.
 // ToolTimeout, MaxToolCalls, MaxToolResultBytes가 0이면 Runtime 기본값을 사용한다.
-// MaxToolCalls 값과 MaxToolResultBytes 값은 음수를 허용하지 않는다.
+// ToolTimeout, MaxToolCalls, MaxToolResultBytes 값은 음수를 허용하지 않는다.
 // MaxSteps 값이 0 이하이면 LLM을 호출하지 않고 StatusMaxSteps 상태로 종료한다.
 type Options struct {
 	Client             llm.LLMClient
@@ -116,6 +116,12 @@ func newAgent(opts Options, modelCall modelCallOptions) (*Agent, error) {
 	}
 	if err := validateModelMiddleware(modelCall.middleware); err != nil {
 		return nil, err
+	}
+	if modelCall.timeout < 0 {
+		return nil, errors.New("agent model timeout must not be negative")
+	}
+	if opts.ToolTimeout < 0 {
+		return nil, errors.New("agent tool timeout must not be negative")
 	}
 	if opts.MaxToolCalls < 0 {
 		return nil, errors.New("agent max tool calls must not be negative")

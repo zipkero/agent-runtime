@@ -116,6 +116,52 @@ func TestLoadFileRejectsInvalidDuration(t *testing.T) {
 	}
 }
 
+func TestLoadFileValidatesPositiveLLMTimeout(t *testing.T) {
+	tests := []struct {
+		name      string
+		value     string
+		process   bool
+		want      time.Duration
+		wantError bool
+	}{
+		{name: "dot env positive", value: "1ns", want: time.Nanosecond},
+		{name: "dot env zero", value: "0s", wantError: true},
+		{name: "dot env negative", value: "-1ns", wantError: true},
+		{name: "process env positive", value: "2s", process: true, want: 2 * time.Second},
+		{name: "process env zero", value: "0s", process: true, wantError: true},
+		{name: "process env negative", value: "-2s", process: true, wantError: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			clearConfigEnv(t)
+			path := writeEnvFile(t, "LLM_TIMEOUT=3s\n")
+			if tt.process {
+				t.Setenv(envLLMTimeout, tt.value)
+			} else {
+				path = writeEnvFile(t, "LLM_TIMEOUT="+tt.value+"\n")
+			}
+
+			cfg, err := LoadFile(path)
+			if tt.wantError {
+				if err == nil {
+					t.Fatal("LoadFile() error = nil, want non-positive timeout error")
+				}
+				if !strings.Contains(err.Error(), envLLMTimeout) {
+					t.Fatalf("LoadFile() error = %q, want %s context", err, envLLMTimeout)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("LoadFile() error = %v", err)
+			}
+			if cfg.LLMTimeout != tt.want {
+				t.Fatalf("LLMTimeout = %s, want %s", cfg.LLMTimeout, tt.want)
+			}
+		})
+	}
+}
+
 func clearConfigEnv(t *testing.T) {
 	t.Helper()
 

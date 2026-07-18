@@ -72,7 +72,7 @@
   - 참조: SPEC §5.1, SPEC §5.8, SPEC §5.10, SPEC §5.11, SPEC §5.15, ANALYSIS §2, ANALYSIS §3,
     ANALYSIS §5.11
 
-- [ ] task-010: Timeout과 실행 제한 설정 검증 통일
+- [x] task-010: Timeout과 실행 제한 설정 검증 통일
   - 목적: 잘못된 비양수 설정이 CLI에서는 즉시 timeout, Runner에서는 무제한으로 다르게 동작하지 않고 실행 전에
     일관된 오류로 확인된다.
   - 접근: config의 `LLM_TIMEOUT`은 양수만 허용한다. Agent와 Runner 생성 시 음수 model·Tool timeout 및 Tool 호출·result

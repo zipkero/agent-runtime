@@ -11,6 +11,7 @@ import (
 
 // RunnerOptions 구조체는 단일 Agent 실행에 필요한 공급자 중립 의존성과 실행 제한이다.
 // ModelTimeout 값이 0이면 공급자 호출에 별도 제한 시간을 추가하지 않고, 나머지 기본값은 Options 구조체와 동일하다.
+// Timeout과 Tool 호출·result 제한은 음수를 허용하지 않는다.
 type RunnerOptions struct {
 	Client             llm.LLMClient
 	Model              string

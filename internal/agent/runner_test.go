@@ -192,19 +192,70 @@ func TestNewRunnerRequiresClient(t *testing.T) {
 	}
 }
 
-func TestNewRunnerRejectsNegativeToolLimits(t *testing.T) {
+func TestNewRunnerValidatesTimeoutAndToolLimitBoundaries(t *testing.T) {
 	client := &stubClient{}
 	tests := []struct {
-		name string
-		opts RunnerOptions
+		name               string
+		opts               RunnerOptions
+		wantError          bool
+		wantModelTimeout   time.Duration
+		wantToolTimeout    time.Duration
+		wantMaxToolCalls   int
+		wantMaxResultBytes int
 	}{
-		{name: "tool calls", opts: RunnerOptions{Client: client, MaxToolCalls: -1}},
-		{name: "tool result bytes", opts: RunnerOptions{Client: client, MaxToolResultBytes: -1}},
+		{
+			name: "positive values",
+			opts: RunnerOptions{
+				Client:             client,
+				ModelTimeout:       time.Second,
+				ToolTimeout:        2 * time.Second,
+				MaxToolCalls:       1,
+				MaxToolResultBytes: 1,
+			},
+			wantModelTimeout:   time.Second,
+			wantToolTimeout:    2 * time.Second,
+			wantMaxToolCalls:   1,
+			wantMaxResultBytes: 1,
+		},
+		{
+			name:               "zero defaults",
+			opts:               RunnerOptions{Client: client},
+			wantToolTimeout:    defaultToolTimeout,
+			wantMaxToolCalls:   defaultMaxToolCalls,
+			wantMaxResultBytes: runtimetool.DefaultMaxResultBytes,
+		},
+		{name: "negative model timeout", opts: RunnerOptions{Client: client, ModelTimeout: -time.Nanosecond}, wantError: true},
+		{name: "negative tool timeout", opts: RunnerOptions{Client: client, ToolTimeout: -time.Nanosecond}, wantError: true},
+		{name: "negative tool calls", opts: RunnerOptions{Client: client, MaxToolCalls: -1}, wantError: true},
+		{name: "negative tool result bytes", opts: RunnerOptions{Client: client, MaxToolResultBytes: -1}, wantError: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if _, err := NewRunner(tt.opts); err == nil {
-				t.Fatal("NewRunner() error = nil, want negative limit error")
+			runner, err := NewRunner(tt.opts)
+			if tt.wantError {
+				if err == nil {
+					t.Fatal("NewRunner() error = nil, want invalid option error")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("NewRunner() error = %v", err)
+			}
+			if runner.agent.modelTimeout != tt.wantModelTimeout ||
+				runner.agent.toolTimeout != tt.wantToolTimeout ||
+				runner.agent.maxToolCalls != tt.wantMaxToolCalls ||
+				runner.agent.maxToolResultBytes != tt.wantMaxResultBytes {
+				t.Fatalf(
+					"limits = %s/%s/%d/%d, want %s/%s/%d/%d",
+					runner.agent.modelTimeout,
+					runner.agent.toolTimeout,
+					runner.agent.maxToolCalls,
+					runner.agent.maxToolResultBytes,
+					tt.wantModelTimeout,
+					tt.wantToolTimeout,
+					tt.wantMaxToolCalls,
+					tt.wantMaxResultBytes,
+				)
 			}
 		})
 	}

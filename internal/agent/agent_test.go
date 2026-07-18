@@ -1186,19 +1186,58 @@ func TestRunClassifiesCallerDeadlineDuringToolAsExecutionLimit(t *testing.T) {
 	}
 }
 
-func TestNewRejectsNegativeToolLimits(t *testing.T) {
+func TestNewValidatesTimeoutAndToolLimitBoundaries(t *testing.T) {
 	client := &stubClient{}
 	tests := []struct {
-		name string
-		opts Options
+		name               string
+		opts               Options
+		wantError          bool
+		wantToolTimeout    time.Duration
+		wantMaxToolCalls   int
+		wantMaxResultBytes int
 	}{
-		{name: "tool calls", opts: Options{Client: client, MaxToolCalls: -1}},
-		{name: "tool result bytes", opts: Options{Client: client, MaxToolResultBytes: -1}},
+		{
+			name:               "positive values",
+			opts:               Options{Client: client, ToolTimeout: time.Second, MaxToolCalls: 1, MaxToolResultBytes: 1},
+			wantToolTimeout:    time.Second,
+			wantMaxToolCalls:   1,
+			wantMaxResultBytes: 1,
+		},
+		{
+			name:               "zero defaults",
+			opts:               Options{Client: client},
+			wantToolTimeout:    defaultToolTimeout,
+			wantMaxToolCalls:   defaultMaxToolCalls,
+			wantMaxResultBytes: runtimetool.DefaultMaxResultBytes,
+		},
+		{name: "negative tool timeout", opts: Options{Client: client, ToolTimeout: -time.Nanosecond}, wantError: true},
+		{name: "negative tool calls", opts: Options{Client: client, MaxToolCalls: -1}, wantError: true},
+		{name: "negative tool result bytes", opts: Options{Client: client, MaxToolResultBytes: -1}, wantError: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if _, err := New(tt.opts); err == nil {
-				t.Fatal("New() error = nil, want negative limit error")
+			agent, err := New(tt.opts)
+			if tt.wantError {
+				if err == nil {
+					t.Fatal("New() error = nil, want invalid option error")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("New() error = %v", err)
+			}
+			if agent.toolTimeout != tt.wantToolTimeout ||
+				agent.maxToolCalls != tt.wantMaxToolCalls ||
+				agent.maxToolResultBytes != tt.wantMaxResultBytes {
+				t.Fatalf(
+					"limits = %s/%d/%d, want %s/%d/%d",
+					agent.toolTimeout,
+					agent.maxToolCalls,
+					agent.maxToolResultBytes,
+					tt.wantToolTimeout,
+					tt.wantMaxToolCalls,
+					tt.wantMaxResultBytes,
+				)
 			}
 		})
 	}
