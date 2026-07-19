@@ -27,20 +27,21 @@ const (
 type TraceAction string
 
 const (
-	TraceActionUserMessage        TraceAction = "user_message"
-	TraceActionLLMRequest         TraceAction = "llm_request"
-	TraceActionLLMResponse        TraceAction = "llm_response"
-	TraceActionFinal              TraceAction = "final"
-	TraceActionNeedsAction        TraceAction = "needs_action"
-	TraceActionMaxSteps           TraceAction = "max_steps"
-	TraceActionLLMError           TraceAction = "llm_error"
-	TraceActionMiddlewareError    TraceAction = "middleware_error"
-	TraceActionToolCall           TraceAction = "tool_call"
-	TraceActionToolResult         TraceAction = "tool_result"
-	TraceActionToolError          TraceAction = "tool_error"
-	TraceActionToolTimeout        TraceAction = "tool_timeout"
-	TraceActionExecutionLimit     TraceAction = "execution_limit"
-	TraceActionIncompleteResponse TraceAction = "incomplete_response"
+	TraceActionUserMessage           TraceAction = "user_message"
+	TraceActionLLMRequest            TraceAction = "llm_request"
+	TraceActionLLMResponse           TraceAction = "llm_response"
+	TraceActionFinal                 TraceAction = "final"
+	TraceActionNeedsAction           TraceAction = "needs_action"
+	TraceActionMaxSteps              TraceAction = "max_steps"
+	TraceActionLLMError              TraceAction = "llm_error"
+	TraceActionMiddlewareError       TraceAction = "middleware_error"
+	TraceActionToolCall              TraceAction = "tool_call"
+	TraceActionToolResult            TraceAction = "tool_result"
+	TraceActionToolError             TraceAction = "tool_error"
+	TraceActionToolTimeout           TraceAction = "tool_timeout"
+	TraceActionExecutionLimit        TraceAction = "execution_limit"
+	TraceActionIncompleteResponse    TraceAction = "incomplete_response"
+	TraceActionStructuredOutputError TraceAction = "structured_output_error"
 )
 
 const (

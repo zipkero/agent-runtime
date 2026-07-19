@@ -22,13 +22,24 @@ type RunnerErrorKind string
 
 const (
 	RunnerErrorKindMiddleware         RunnerErrorKind = "middleware"
+	RunnerErrorKindStructuredOutput   RunnerErrorKind = "structured_output"
 	RunnerErrorKindExecutionLimit     RunnerErrorKind = "execution_limit"
 	RunnerErrorKindIncompleteResponse RunnerErrorKind = "incomplete_response"
+)
+
+// StructuredOutputOperation 타입은 structured output 처리 중 실패한 단계를 식별한다.
+type StructuredOutputOperation string
+
+const (
+	StructuredOutputOperationSchemaCompile StructuredOutputOperation = "schema_compile"
+	StructuredOutputOperationJSONParse     StructuredOutputOperation = "json_parse"
+	StructuredOutputOperationValidation    StructuredOutputOperation = "validation"
 )
 
 // RunnerError 구조체는 Runner 고유 실패 분류와 원인을 함께 보존한다.
 type RunnerError struct {
 	Kind         RunnerErrorKind
+	Operation    StructuredOutputOperation
 	Stage        MiddlewareStage
 	Middleware   string
 	Limit        string
@@ -40,6 +51,9 @@ type RunnerError struct {
 }
 
 func (e *RunnerError) Error() string {
+	if e.Kind == RunnerErrorKindStructuredOutput {
+		return fmt.Sprintf("agent runner %s %s: %v", e.Kind, e.Operation, e.Err)
+	}
 	if e.Kind == RunnerErrorKindExecutionLimit {
 		if e.Maximum > 0 {
 			return fmt.Sprintf("agent runner %s %s: current %d exceeds maximum %d", e.Kind, e.Limit, e.Current, e.Maximum)
@@ -164,5 +178,13 @@ func incompleteResponseError(finishReason llm.FinishReason, stopReason string) e
 		Kind:         RunnerErrorKindIncompleteResponse,
 		FinishReason: finishReason,
 		StopReason:   stopReason,
+	}
+}
+
+func structuredOutputError(operation StructuredOutputOperation, err error) error {
+	return &RunnerError{
+		Kind:      RunnerErrorKindStructuredOutput,
+		Operation: operation,
+		Err:       err,
 	}
 }

@@ -54,6 +54,9 @@ func TestRunnerExecutesToolLoopAndReturnsFinalState(t *testing.T) {
 	if result.State.Status != StatusFinal || result.State.FinalAnswer != "final answer" {
 		t.Fatalf("State = %+v, want final answer", result.State)
 	}
+	if result.StructuredOutput != nil {
+		t.Fatalf("StructuredOutput = %s, want nil without schema", result.StructuredOutput)
+	}
 	if result.State.Step != 2 || client.calls != 2 || lookupTool.calls != 1 {
 		t.Fatalf("steps/client calls/tool calls = %d/%d/%d, want 2/2/1", result.State.Step, client.calls, lookupTool.calls)
 	}

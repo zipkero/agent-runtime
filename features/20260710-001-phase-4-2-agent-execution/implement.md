@@ -85,7 +85,7 @@
   - 참조: SPEC §5.1, SPEC §5.9, SPEC §5.10, SPEC §5.11, SPEC §5.17, ANALYSIS §2, ANALYSIS §3,
     ANALYSIS §5.13
 
-- [ ] task-003: JSON Schema structured output 검증 추가
+- [x] task-003: JSON Schema structured output 검증 추가
   - 목적: output schema를 지정한 호출자가 최종 assistant JSON을 검증된 원문으로 받거나, schema compile·JSON parse·validation
     실패를 일반 LLM 오류와 구분해 확인할 수 있다.
   - 접근: `github.com/santhosh-tekuri/jsonschema/v6@v6.0.2`를 내부 구현 의존성으로 추가하고 Runner 생성 시 self-contained schema를
