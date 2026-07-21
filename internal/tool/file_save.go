@@ -12,7 +12,7 @@ import (
 )
 
 // FileSave 구조체는 허용된 루트 아래에 파일을 저장하는 Tool이다.
-// 필요한 상위 디렉터리는 만들지만, 루트를 벗어나는 경로와 상위 경로의 심볼릭 링크는 거부한다.
+// 필요한 상위 디렉터리는 만들지만, 실제 파일시스템에서 루트 밖을 가리키는 심볼릭 링크는 거부한다.
 // 기존 파일은 overwrite 인수가 true일 때만 덮어쓴다.
 type FileSave struct {
 	root string
@@ -71,7 +71,13 @@ func (f FileSave) Execute(ctx context.Context, args json.RawMessage) (Result, er
 		return Result{}, canceledExecutionError("save file", err)
 	}
 
-	info, err := os.Lstat(target)
+	root, err := os.OpenRoot(f.root)
+	if err != nil {
+		return Result{}, ExecutionErrorf("open save root failed: %v", err)
+	}
+	defer root.Close()
+
+	info, err := root.Stat(target)
 	overwritten := false
 	if err == nil {
 		if !info.Mode().IsRegular() {
@@ -86,23 +92,34 @@ func (f FileSave) Execute(ctx context.Context, args json.RawMessage) (Result, er
 	}
 
 	parent := filepath.Dir(target)
-	if err := os.MkdirAll(parent, 0o755); err != nil {
+	if err := root.MkdirAll(parent, 0o755); err != nil {
 		return Result{}, ExecutionErrorf("create parent directory failed: %v", err)
-	}
-	if err := ensureNoSymlinkPath(f.root, parent); err != nil {
-		return Result{}, err
 	}
 	if err := ctx.Err(); err != nil {
 		return Result{}, canceledExecutionError("save file", err)
 	}
 
 	contentBytes := []byte(*arguments.Content)
-	err = os.WriteFile(target, contentBytes, 0o644)
+	flags := os.O_WRONLY | os.O_CREATE
+	if arguments.Overwrite {
+		flags |= os.O_TRUNC
+	} else {
+		flags |= os.O_EXCL
+	}
+	file, err := root.OpenFile(target, flags, 0o644)
+	if err != nil {
+		return Result{}, ExecutionErrorf("write file failed: %v", err)
+	}
+	_, writeErr := file.Write(contentBytes)
+	closeErr := file.Close()
 	if ctxErr := ctx.Err(); ctxErr != nil {
 		return Result{}, canceledExecutionError("save file", ctxErr)
 	}
-	if err != nil {
-		return Result{}, ExecutionErrorf("write file failed: %v", err)
+	if writeErr != nil {
+		return Result{}, ExecutionErrorf("write file failed: %v", writeErr)
+	}
+	if closeErr != nil {
+		return Result{}, ExecutionErrorf("close file failed: %v", closeErr)
 	}
 
 	content := fileSaveContent{
@@ -150,42 +167,11 @@ func (f FileSave) resolveSavePath(raw json.RawMessage) (string, fileSaveArgument
 		return "", fileSaveArguments{}, ValidationErrorf("content is required")
 	}
 
-	cleanPath := filepath.Clean(inputPath)
-	target, err := filepath.Abs(filepath.Join(f.root, cleanPath))
-	if err != nil {
-		return "", fileSaveArguments{}, ValidationErrorf("invalid path: %v", err)
-	}
-	if !isPathInsideRoot(f.root, target) {
+	if !filepath.IsLocal(inputPath) {
 		return "", fileSaveArguments{}, ValidationErrorf("path escapes root")
 	}
 
+	cleanPath := filepath.Clean(inputPath)
 	arguments.Path = cleanPath
-	return target, arguments, nil
-}
-
-// ensureNoSymlinkPath 함수는 생성된 상위 디렉터리가 심볼릭 링크를 통해 루트 밖을 가리키는 것을 막는다.
-func ensureNoSymlinkPath(root, target string) error {
-	rel, err := filepath.Rel(root, target)
-	if err != nil {
-		return ExecutionErrorf("inspect parent directory failed: %v", err)
-	}
-	if rel == "." {
-		return nil
-	}
-
-	current := root
-	for _, part := range strings.Split(rel, string(filepath.Separator)) {
-		current = filepath.Join(current, part)
-		info, err := os.Lstat(current)
-		if err != nil {
-			return ExecutionErrorf("inspect parent directory failed: %v", err)
-		}
-		if info.Mode()&os.ModeSymlink != 0 {
-			return ExecutionErrorf("parent directory contains a symlink")
-		}
-		if !info.IsDir() {
-			return ExecutionErrorf("parent path is not a directory")
-		}
-	}
-	return nil
+	return cleanPath, arguments, nil
 }

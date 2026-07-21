@@ -99,7 +99,7 @@
       단위 테스트하고 `go test ./internal/agent`와 `go test ./...`를 실행한다.
   - 참조: SPEC §5.6, SPEC §5.7, SPEC §5.8, SPEC §5.11, ANALYSIS §1, ANALYSIS §2, ANALYSIS §3, ANALYSIS §4
 
-- [ ] task-006: File Tool root 격리 강화
+- [x] task-006: File Tool root 격리 강화
   - 목적: File Read와 File Save가 symbolic link나 경로 변경을 통해 주입된 root 밖을 읽거나 변경하지 않으며, 거부된
     저장이 root 밖에 디렉터리나 파일을 남기지 않는다.
   - 접근: lexical path 검사와 사후 symlink 순회를 보안 경계로 사용하지 않고, 각 실행에서 Go 1.26 표준 `os.OpenRoot`로

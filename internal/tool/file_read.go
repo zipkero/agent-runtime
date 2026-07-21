@@ -12,8 +12,7 @@ import (
 )
 
 // FileRead 구조체는 허용된 루트 아래의 일반 파일만 읽는 Tool이다.
-// 절대 경로와 .. 기반 루트 이탈을 거부하며 결과는 DefaultMaxResultBytes를 넘지 않는다.
-// 상위 경로의 심볼릭 링크까지 차단하는 보안 격리는 제공하지 않는다.
+// 절대 경로와 실제 파일시스템에서 루트 밖을 가리키는 심볼릭 링크를 거부하며 결과는 DefaultMaxResultBytes를 넘지 않는다.
 type FileRead struct {
 	root string
 }
@@ -71,19 +70,25 @@ func (f FileRead) Execute(ctx context.Context, args json.RawMessage) (Result, er
 		return Result{}, canceledExecutionError("read file", err)
 	}
 
-	info, err := os.Lstat(path)
+	root, err := os.OpenRoot(f.root)
 	if err != nil {
-		return Result{}, ExecutionErrorf("read file failed: %v", err)
+		return Result{}, ExecutionErrorf("open read root failed: %v", err)
 	}
-	if !info.Mode().IsRegular() {
-		return Result{}, ExecutionErrorf("path is not a regular file")
-	}
+	defer root.Close()
 
-	file, err := os.Open(path)
+	file, err := root.Open(path)
 	if err != nil {
 		return Result{}, ExecutionErrorf("read file failed: %v", err)
 	}
 	defer file.Close()
+
+	info, err := file.Stat()
+	if err != nil {
+		return Result{}, ExecutionErrorf("inspect file failed: %v", err)
+	}
+	if !info.Mode().IsRegular() {
+		return Result{}, ExecutionErrorf("path is not a regular file")
+	}
 
 	content, err := io.ReadAll(io.LimitReader(file, DefaultMaxResultBytes+1))
 	if ctxErr := ctx.Err(); ctxErr != nil {
@@ -121,22 +126,9 @@ func (f FileRead) resolvePath(raw json.RawMessage) (string, error) {
 		return "", ValidationErrorf("absolute path is not allowed")
 	}
 
-	target, err := filepath.Abs(filepath.Join(f.root, filepath.Clean(inputPath)))
-	if err != nil {
-		return "", ValidationErrorf("invalid path: %v", err)
-	}
-
-	if !isPathInsideRoot(f.root, target) {
+	if !filepath.IsLocal(inputPath) {
 		return "", ValidationErrorf("path escapes root")
 	}
 
-	return target, nil
-}
-
-func isPathInsideRoot(root, path string) bool {
-	rel, err := filepath.Rel(root, path)
-	if err != nil {
-		return false
-	}
-	return rel == "." || (rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) && !filepath.IsAbs(rel))
+	return filepath.Clean(inputPath), nil
 }

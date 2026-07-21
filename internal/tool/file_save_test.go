@@ -181,23 +181,63 @@ func TestFileSaveReturnsExecutionErrors(t *testing.T) {
 	}
 }
 
-func TestFileSaveRejectsSymlinkParent(t *testing.T) {
+func TestFileSaveRejectsSymlinksOutsideRootWithoutSideEffects(t *testing.T) {
 	root := t.TempDir()
 	outside := t.TempDir()
-	if err := os.Symlink(outside, filepath.Join(root, "linked")); err != nil {
-		t.Skipf("Symlink() error = %v", err)
+	createDirectoryLink(t, outside, filepath.Join(root, "linked"))
+	outsideFile := filepath.Join(outside, "existing.txt")
+	if err := os.WriteFile(outsideFile, []byte("original"), 0o644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
 	}
 	saveFile, err := NewFileSave(root)
 	if err != nil {
 		t.Fatalf("NewFileSave() error = %v", err)
 	}
 
-	_, err = saveFile.Execute(context.Background(), json.RawMessage(`{"path":"linked/note.txt","content":"x"}`))
-	if !IsExecutionError(err) {
-		t.Fatalf("Execute() error = %v, want execution error", err)
+	t.Run("intermediate symlink with new parents", func(t *testing.T) {
+		args := json.RawMessage(`{"path":"linked/new/parents/note.txt","content":"x"}`)
+		if err := saveFile.Validate(args); err != nil {
+			t.Fatalf("Validate() error = %v", err)
+		}
+
+		_, err := saveFile.Execute(context.Background(), args)
+		if !IsExecutionError(err) {
+			t.Fatalf("Execute() error = %v, want execution error", err)
+		}
+	})
+
+	t.Run("final directory symlink", func(t *testing.T) {
+		args := json.RawMessage(`{"path":"linked","content":"changed","overwrite":true}`)
+		if err := saveFile.Validate(args); err != nil {
+			t.Fatalf("Validate() error = %v", err)
+		}
+
+		_, err := saveFile.Execute(context.Background(), args)
+		if !IsExecutionError(err) {
+			t.Fatalf("Execute() error = %v, want execution error", err)
+		}
+	})
+
+	t.Run("final file symlink", func(t *testing.T) {
+		if err := os.Symlink(outsideFile, filepath.Join(root, "file-link.txt")); err != nil {
+			t.Skipf("Symlink() error = %v", err)
+		}
+		args := json.RawMessage(`{"path":"file-link.txt","content":"changed","overwrite":true}`)
+		if err := saveFile.Validate(args); err != nil {
+			t.Fatalf("Validate() error = %v", err)
+		}
+
+		_, err := saveFile.Execute(context.Background(), args)
+		if !IsExecutionError(err) {
+			t.Fatalf("Execute() error = %v, want execution error", err)
+		}
+	})
+
+	if _, err := os.Stat(filepath.Join(outside, "new")); !os.IsNotExist(err) {
+		t.Fatalf("outside parent Stat() error = %v, want not exist", err)
 	}
-	if _, err := os.Stat(filepath.Join(outside, "note.txt")); !os.IsNotExist(err) {
-		t.Fatalf("outside file Stat() error = %v, want not exist", err)
+	if content, err := os.ReadFile(outsideFile); err != nil || string(content) != "original" {
+		t.Fatalf("outside file content = %q, error = %v, want original", string(content), err)
 	}
 }
 

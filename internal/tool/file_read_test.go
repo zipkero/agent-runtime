@@ -135,6 +135,60 @@ func TestFileReadReturnsExecutionErrors(t *testing.T) {
 	}
 }
 
+func TestFileReadRejectsSymlinksOutsideRoot(t *testing.T) {
+	root := t.TempDir()
+	outside := t.TempDir()
+	outsideFile := filepath.Join(outside, "secret.txt")
+	if err := os.WriteFile(outsideFile, []byte("secret"), 0o644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+	createDirectoryLink(t, outside, filepath.Join(root, "linked"))
+
+	readFile, err := NewFileRead(root)
+	if err != nil {
+		t.Fatalf("NewFileRead() error = %v", err)
+	}
+
+	t.Run("intermediate symlink", func(t *testing.T) {
+		args := json.RawMessage(`{"path":` + quoteJSON(t, filepath.Join("linked", "secret.txt")) + `}`)
+		if err := readFile.Validate(args); err != nil {
+			t.Fatalf("Validate() error = %v", err)
+		}
+
+		_, err := readFile.Execute(context.Background(), args)
+		if !IsExecutionError(err) {
+			t.Fatalf("Execute() error = %v, want execution error", err)
+		}
+	})
+
+	t.Run("final directory symlink", func(t *testing.T) {
+		args := json.RawMessage(`{"path":"linked"}`)
+		if err := readFile.Validate(args); err != nil {
+			t.Fatalf("Validate() error = %v", err)
+		}
+
+		_, err := readFile.Execute(context.Background(), args)
+		if !IsExecutionError(err) {
+			t.Fatalf("Execute() error = %v, want execution error", err)
+		}
+	})
+
+	t.Run("final symlink", func(t *testing.T) {
+		if err := os.Symlink(outsideFile, filepath.Join(root, "secret-link.txt")); err != nil {
+			t.Skipf("Symlink() error = %v", err)
+		}
+		args := json.RawMessage(`{"path":"secret-link.txt"}`)
+		if err := readFile.Validate(args); err != nil {
+			t.Fatalf("Validate() error = %v", err)
+		}
+
+		_, err := readFile.Execute(context.Background(), args)
+		if !IsExecutionError(err) {
+			t.Fatalf("Execute() error = %v, want execution error", err)
+		}
+	})
+}
+
 func TestFileReadReturnsExecutionErrorWhenContextCanceled(t *testing.T) {
 	readFile, err := NewFileRead(t.TempDir())
 	if err != nil {
