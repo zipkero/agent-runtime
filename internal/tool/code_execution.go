@@ -16,6 +16,18 @@ import (
 
 const defaultCodeExecutionOutputLimit = 64 * 1024
 
+var codeExecutionEnvironmentAllowlist = [...]string{
+	"PATH",
+	"TMPDIR",
+	"GOROOT",
+	"GOCACHE",
+	"GOMODCACHE",
+	"GOPATH",
+	"GOOS",
+	"GOARCH",
+	"CGO_ENABLED",
+}
+
 // CodeExecution 구조체는 지정된 루트에서 허용 목록에 있는 Go 명령만 실행하는 Tool이다.
 // 출력과 경로 이동은 제한하지만 운영체제 수준의 보안 격리를 제공하지는 않는다.
 type CodeExecution struct {
@@ -107,12 +119,19 @@ func (c CodeExecution) Execute(ctx context.Context, args json.RawMessage) (Resul
 		return result, codeExecutionError(result.Content, err)
 	}
 
+	goTempDir, err := os.MkdirTemp(c.root, ".agent-runtime-go-")
+	if err != nil {
+		return Result{}, ExecutionErrorf("create Go work directory failed: %v", err)
+	}
+	defer func() {
+		_ = os.RemoveAll(goTempDir)
+	}()
+
 	stdout := &limitedOutput{limit: c.outputLimit}
 	stderr := &limitedOutput{limit: c.outputLimit}
 	cmd := exec.CommandContext(ctx, c.executable, arguments.Args...)
 	cmd.Dir = c.root
-	// 외부 go.work가 작업 루트 밖의 모듈을 실행 범위에 끌어들이지 못하도록 워크스페이스 탐색을 끈다.
-	cmd.Env = append(os.Environ(), "GOWORK=off")
+	cmd.Env = codeExecutionEnvironment(goTempDir)
 	cmd.Stdout = stdout
 	cmd.Stderr = stderr
 	cmd.Stdin = strings.NewReader(arguments.Stdin)
@@ -139,6 +158,28 @@ func (c CodeExecution) Execute(ctx context.Context, args json.RawMessage) (Resul
 
 	result := resultWithExecutionContent(content)
 	return result, nil
+}
+
+// codeExecutionEnvironment 함수는 Code Execution 자식 프로세스에 필요한 값만 전달하고 실행별 임시 경로와 workspace 비활성화를 강제한다.
+func codeExecutionEnvironment(goTempDir string) []string {
+	environment := make([]string, 0, len(codeExecutionEnvironmentAllowlist)+3)
+	hasGoCache := false
+	for _, key := range codeExecutionEnvironmentAllowlist {
+		if value, ok := os.LookupEnv(key); ok {
+			if key == "GOCACHE" && strings.TrimSpace(value) == "" {
+				continue
+			}
+			environment = append(environment, key+"="+value)
+			if key == "GOCACHE" {
+				hasGoCache = true
+			}
+		}
+	}
+	if !hasGoCache {
+		environment = append(environment, "GOCACHE="+filepath.Join(goTempDir, "cache"))
+	}
+	environment = append(environment, "GOTMPDIR="+goTempDir)
+	return append(environment, "GOWORK=off")
 }
 
 type codeExecutionArguments struct {

@@ -5,6 +5,7 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -21,24 +22,26 @@ const (
 )
 
 const (
-	envLLMProvider = "LLM_PROVIDER"
-	envLLMModel    = "LLM_MODEL"
-	envLLMHost     = "LLM_HOST"
-	envLLMAPIKey   = "LLM_API_KEY"
-	envLLMTimeout  = "LLM_TIMEOUT"
-	envTavilyKey   = "TAVILY_API_KEY"
-	envLogLevel    = "LOG_LEVEL"
+	envLLMProvider         = "LLM_PROVIDER"
+	envLLMModel            = "LLM_MODEL"
+	envLLMHost             = "LLM_HOST"
+	envLLMAPIKey           = "LLM_API_KEY"
+	envLLMTimeout          = "LLM_TIMEOUT"
+	envTavilyKey           = "TAVILY_API_KEY"
+	envEnableCodeExecution = "ENABLE_CODE_EXECUTION"
+	envLogLevel            = "LOG_LEVEL"
 )
 
 // Config 구조체는 Runtime 실행과 외부 공급자 연결에 필요한 설정값이다.
 type Config struct {
-	LLMProvider  string
-	LLMModel     string
-	LLMHost      string
-	LLMAPIKey    string
-	LLMTimeout   time.Duration
-	TavilyAPIKey string
-	LogLevel     string
+	LLMProvider         string
+	LLMModel            string
+	LLMHost             string
+	LLMAPIKey           string
+	LLMTimeout          time.Duration
+	TavilyAPIKey        string
+	EnableCodeExecution bool
+	LogLevel            string
 }
 
 // Load 함수는 현재 작업 디렉터리의 .env와 실제 환경변수를 병합해 설정을 만든다.
@@ -113,15 +116,20 @@ func build(values map[string]string) (Config, error) {
 	if timeout <= 0 {
 		return Config{}, fmt.Errorf("%s: duration must be positive", envLLMTimeout)
 	}
+	enableCodeExecution, err := boolValue(values[envEnableCodeExecution], false)
+	if err != nil {
+		return Config{}, fmt.Errorf("%s: %w", envEnableCodeExecution, err)
+	}
 
 	return Config{
-		LLMProvider:  stringValue(values[envLLMProvider], DefaultLLMProvider),
-		LLMModel:     values[envLLMModel],
-		LLMHost:      stringValue(values[envLLMHost], DefaultLLMHost),
-		LLMAPIKey:    values[envLLMAPIKey],
-		LLMTimeout:   timeout,
-		TavilyAPIKey: values[envTavilyKey],
-		LogLevel:     stringValue(values[envLogLevel], DefaultLogLevel),
+		LLMProvider:         stringValue(values[envLLMProvider], DefaultLLMProvider),
+		LLMModel:            values[envLLMModel],
+		LLMHost:             stringValue(values[envLLMHost], DefaultLLMHost),
+		LLMAPIKey:           values[envLLMAPIKey],
+		LLMTimeout:          timeout,
+		TavilyAPIKey:        values[envTavilyKey],
+		EnableCodeExecution: enableCodeExecution,
+		LogLevel:            stringValue(values[envLogLevel], DefaultLogLevel),
 	}, nil
 }
 
@@ -142,4 +150,12 @@ func durationValue(value string, fallback time.Duration) (time.Duration, error) 
 		return 0, err
 	}
 	return duration, nil
+}
+
+func boolValue(value string, fallback bool) (bool, error) {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return fallback, nil
+	}
+	return strconv.ParseBool(trimmed)
 }

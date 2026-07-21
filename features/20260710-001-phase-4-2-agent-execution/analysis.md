@@ -144,7 +144,9 @@ JSON 파싱이나 schema validation이 실패하면 마지막 assistant message�
 CLI는 기존 prompt 검증과 config/client 생성 뒤 현재 작업 디렉터리를 구한다. 네 기본 Tool을 registry에 등록하고
 `ENABLE_CODE_EXECUTION=true`이면 Code Execution을 추가한 뒤 Runner를 만든다. Code Execution 자식 process에는
 `PATH`, `TMPDIR`, `GOROOT`, `GOCACHE`, `GOMODCACHE`, `GOPATH`, `GOOS`, `GOARCH`, `CGO_ENABLED` 중 현재 process에
-존재하는 값과 강제된 `GOWORK=off`만 전달한다. Final 상태면 `FinalAnswer`를 stdout에 한 번 출력하고, final이 아닌 상태는
+존재하는 값만 전달한다. 실행마다 Tool root 아래에 전용 임시 디렉터리를 만들어 `GOTMPDIR`로 강제하고 실행 후 정리한다.
+부모에 `GOCACHE`가 없으면 같은 실행 전용 디렉터리의 하위 경로를 기본값으로 사용하며, `GOWORK=off`를 강제한다. Final
+상태면 `FinalAnswer`를 stdout에 한 번 출력하고, final이 아닌 상태는
 stdout을 비워 둔 채 stderr와 0이 아닌 코드로 종료한다(`SPEC §5.9`, `SPEC §5.10`, `SPEC §5.16`).
 
 CLI의 `LLM_TIMEOUT`은 각 model 호출 timeout으로 Runner에 전달한다. 전체 loop는 Runner context cancellation과 CLI의
@@ -385,7 +387,8 @@ CLI Tool의 파일 root는 실행 시 현재 작업 디렉터리로 정해진다
      간단하지만 명시적 승인 없이 host code 실행 capability를 노출한다. C는 가장 안전하지만 Phase 4.1 Tool 조립을
      CLI에서 검증하지 못한다.
    - 채택안: 옵션 A. allowlist는 `PATH`, `TMPDIR`, `GOROOT`, `GOCACHE`, `GOMODCACHE`, `GOPATH`, `GOOS`, `GOARCH`,
-     `CGO_ENABLED`이고 `GOWORK=off`를 강제한다.
+     `CGO_ENABLED`이다. 실행마다 Tool root 아래에 전용 임시 디렉터리를 만들어 `GOTMPDIR`로 강제하고 실행 후 정리한다.
+     부모에 `GOCACHE`가 없으면 같은 디렉터리의 하위 경로를 기본값으로 사용하며, `GOWORK=off`를 강제한다.
    - 근거: `SPEC §5.16`은 Code Execution의 기본 노출과 process secret 전달을 제한한다.
 
 13. 비양수 timeout과 제한값

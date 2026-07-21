@@ -28,6 +28,9 @@ func TestLoadFileUsesDefaultsWithoutEnvFile(t *testing.T) {
 	if cfg.LogLevel != DefaultLogLevel {
 		t.Fatalf("LogLevel = %q, want %q", cfg.LogLevel, DefaultLogLevel)
 	}
+	if cfg.EnableCodeExecution {
+		t.Fatal("EnableCodeExecution = true, want false by default")
+	}
 }
 
 func TestLoadFileReadsDotEnv(t *testing.T) {
@@ -40,6 +43,7 @@ LLM_HOST=https://api.anthropic.com
 LLM_API_KEY=file-secret
 LLM_TIMEOUT=1500ms
 TAVILY_API_KEY=tavily-secret
+ENABLE_CODE_EXECUTION=true
 LOG_LEVEL=debug
 `)
 
@@ -66,6 +70,9 @@ LOG_LEVEL=debug
 	if cfg.TavilyAPIKey != "tavily-secret" {
 		t.Fatalf("TavilyAPIKey = %q, want tavily-secret", cfg.TavilyAPIKey)
 	}
+	if !cfg.EnableCodeExecution {
+		t.Fatal("EnableCodeExecution = false, want true")
+	}
 	if cfg.LogLevel != "debug" {
 		t.Fatalf("LogLevel = %q, want debug", cfg.LogLevel)
 	}
@@ -76,12 +83,14 @@ func TestLoadFilePrefersProcessEnvOverDotEnv(t *testing.T) {
 	t.Setenv(envLLMProvider, "ollama")
 	t.Setenv(envLLMModel, "env-model")
 	t.Setenv(envLLMTimeout, "45s")
+	t.Setenv(envEnableCodeExecution, "true")
 
 	path := writeEnvFile(t, `
 LLM_PROVIDER=claude
 LLM_MODEL=file-model
 LLM_API_KEY=file-secret
 LLM_TIMEOUT=10s
+ENABLE_CODE_EXECUTION=false
 `)
 
 	cfg, err := LoadFile(path)
@@ -100,6 +109,44 @@ LLM_TIMEOUT=10s
 	}
 	if cfg.LLMTimeout != 45*time.Second {
 		t.Fatalf("LLMTimeout = %s, want 45s", cfg.LLMTimeout)
+	}
+	if !cfg.EnableCodeExecution {
+		t.Fatal("EnableCodeExecution = false, want process env true")
+	}
+}
+
+func TestLoadFileParsesEnableCodeExecution(t *testing.T) {
+	tests := []struct {
+		name      string
+		value     string
+		want      bool
+		wantError bool
+	}{
+		{name: "true", value: "true", want: true},
+		{name: "false", value: "false"},
+		{name: "uppercase", value: "TRUE", want: true},
+		{name: "invalid", value: "enabled", wantError: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			clearConfigEnv(t)
+			path := writeEnvFile(t, envEnableCodeExecution+"="+tt.value+"\n")
+
+			cfg, err := LoadFile(path)
+			if tt.wantError {
+				if err == nil || !strings.Contains(err.Error(), envEnableCodeExecution) {
+					t.Fatalf("LoadFile() error = %v, want %s error", err, envEnableCodeExecution)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("LoadFile() error = %v", err)
+			}
+			if cfg.EnableCodeExecution != tt.want {
+				t.Fatalf("EnableCodeExecution = %t, want %t", cfg.EnableCodeExecution, tt.want)
+			}
+		})
 	}
 }
 
@@ -172,6 +219,7 @@ func clearConfigEnv(t *testing.T) {
 		envLLMAPIKey,
 		envLLMTimeout,
 		envTavilyKey,
+		envEnableCodeExecution,
 		envLogLevel,
 	} {
 		key := key

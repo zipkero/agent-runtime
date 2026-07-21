@@ -111,12 +111,13 @@
       일반 경로 회귀를 테스트하고 `go test ./internal/tool` 및 `go test ./...`를 실행한다.
   - 참조: SPEC §5.2, SPEC §5.9, SPEC §5.11, SPEC §5.13, ANALYSIS §2, ANALYSIS §5.9
 
-- [ ] task-009: CLI Code Execution opt-in과 자식 환경 제한
+- [x] task-009: CLI Code Execution opt-in과 자식 환경 제한
   - 목적: CLI가 명시적 활성화 없이 host code 실행 capability를 노출하지 않고, 활성화된 Code Execution도 LLM·Tavily
     secret을 포함한 process 환경 전체를 자식 Go process에 전달하지 않는다.
   - 접근: config와 `.env.example`에 기본 false인 `ENABLE_CODE_EXECUTION`을 추가하고 true일 때만 Tool을 등록한다. 자식
     환경은 `PATH`, `TMPDIR`, `GOROOT`, `GOCACHE`, `GOMODCACHE`, `GOPATH`, `GOOS`, `GOARCH`, `CGO_ENABLED` allowlist와
-    강제된 `GOWORK=off`로 구성한다.
+    강제된 `GOWORK=off`로 구성한다. 실행마다 Tool root 아래에 전용 임시 디렉터리를 만들고 `GOTMPDIR`로 전달한 뒤
+    실행 종료 시 정리하며, 부모에 `GOCACHE`가 없으면 같은 디렉터리의 하위 경로를 기본값으로 사용한다.
   - 검증 조건:
     - 결과: 기본 CLI schema에는 Code Execution이 없고 opt-in 때만 추가된다. 허용된 Go 명령은 필요한 allowlist 환경에서
       동작하며 `LLM_API_KEY`, `TAVILY_API_KEY`와 임의 환경변수는 자식 process에서 관찰되지 않는다.

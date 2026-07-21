@@ -46,6 +46,118 @@ func main() {
 	}
 }
 
+func TestCodeExecutionEnvironmentUsesAllowlist(t *testing.T) {
+	for _, key := range codeExecutionEnvironmentAllowlist {
+		t.Setenv(key, "allowed-"+key)
+	}
+	goTempDir := filepath.Join(t.TempDir(), "go-work")
+	t.Setenv("GOTMPDIR", "outside-go-work")
+	t.Setenv("GOWORK", "outside.work")
+	t.Setenv("LLM_API_KEY", "llm-secret")
+	t.Setenv("TAVILY_API_KEY", "tavily-secret")
+	t.Setenv("UNRELATED_SECRET", "unrelated-secret")
+
+	got := make(map[string]string)
+	for _, item := range codeExecutionEnvironment(goTempDir) {
+		key, value, ok := strings.Cut(item, "=")
+		if !ok {
+			t.Fatalf("environment item = %q, want KEY=VALUE", item)
+		}
+		got[key] = value
+	}
+
+	for _, key := range codeExecutionEnvironmentAllowlist {
+		if got[key] != "allowed-"+key {
+			t.Fatalf("environment[%q] = %q, want allowlisted value", key, got[key])
+		}
+	}
+	if got["GOTMPDIR"] != goTempDir {
+		t.Fatalf("environment[GOTMPDIR] = %q, want %q", got["GOTMPDIR"], goTempDir)
+	}
+	if got["GOWORK"] != "off" {
+		t.Fatalf("environment[GOWORK] = %q, want off", got["GOWORK"])
+	}
+	for _, key := range []string{"LLM_API_KEY", "TAVILY_API_KEY", "UNRELATED_SECRET"} {
+		if _, ok := got[key]; ok {
+			t.Fatalf("environment contains disallowed key %q", key)
+		}
+	}
+	if len(got) != len(codeExecutionEnvironmentAllowlist)+2 {
+		t.Fatalf("environment length = %d, want %d allowlisted values plus GOTMPDIR and GOWORK", len(got), len(codeExecutionEnvironmentAllowlist)+2)
+	}
+}
+
+func TestCodeExecutionUsesRootTempAndHidesSecrets(t *testing.T) {
+	root := newGoModule(t, map[string]string{
+		"main.go": `package main
+
+import (
+	"encoding/json"
+	"os"
+)
+
+func main() {
+	_ = json.NewEncoder(os.Stdout).Encode(map[string]string{
+		"GOTMPDIR": os.Getenv("GOTMPDIR"),
+		"GOCACHE": os.Getenv("GOCACHE"),
+		"GOWORK": os.Getenv("GOWORK"),
+		"LLM_API_KEY": os.Getenv("LLM_API_KEY"),
+		"TAVILY_API_KEY": os.Getenv("TAVILY_API_KEY"),
+		"UNRELATED_SECRET": os.Getenv("UNRELATED_SECRET"),
+	})
+}
+`,
+	})
+	t.Setenv("GOCACHE", "")
+	t.Setenv("GOTMPDIR", filepath.Join(t.TempDir(), "outside-go-work"))
+	t.Setenv("GOWORK", "outside.work")
+	t.Setenv("LLM_API_KEY", "llm-secret")
+	t.Setenv("TAVILY_API_KEY", "tavily-secret")
+	t.Setenv("UNRELATED_SECRET", "unrelated-secret")
+
+	codeExecution, err := NewCodeExecution(root)
+	if err != nil {
+		t.Fatalf("NewCodeExecution() error = %v", err)
+	}
+	got, err := codeExecution.Execute(context.Background(), json.RawMessage(`{"args":["run","."]}`))
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+
+	var content codeExecutionContent
+	if err := json.Unmarshal([]byte(got.Content), &content); err != nil {
+		t.Fatalf("result content is not JSON: %v", err)
+	}
+	var childEnvironment map[string]string
+	if err := json.Unmarshal([]byte(content.Stdout), &childEnvironment); err != nil {
+		t.Fatalf("child stdout is not environment JSON: %v", err)
+	}
+
+	goTempDir := childEnvironment["GOTMPDIR"]
+	relativeTempDir, err := filepath.Rel(root, goTempDir)
+	if err != nil || relativeTempDir == "." || !filepath.IsLocal(relativeTempDir) {
+		t.Fatalf("GOTMPDIR = %q, want a directory under root %q", goTempDir, root)
+	}
+	if !strings.HasPrefix(filepath.Base(goTempDir), ".agent-runtime-go-") {
+		t.Fatalf("GOTMPDIR = %q, want execution-specific directory", goTempDir)
+	}
+	relativeGoCache, err := filepath.Rel(goTempDir, childEnvironment["GOCACHE"])
+	if err != nil || relativeGoCache == "." || !filepath.IsLocal(relativeGoCache) {
+		t.Fatalf("GOCACHE = %q, want a directory under GOTMPDIR %q", childEnvironment["GOCACHE"], goTempDir)
+	}
+	if childEnvironment["GOWORK"] != "off" {
+		t.Fatalf("GOWORK = %q, want off", childEnvironment["GOWORK"])
+	}
+	for _, key := range []string{"LLM_API_KEY", "TAVILY_API_KEY", "UNRELATED_SECRET"} {
+		if childEnvironment[key] != "" {
+			t.Fatalf("child environment contains secret %q", key)
+		}
+	}
+	if _, err := os.Stat(goTempDir); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("GOTMPDIR still exists after execution: %v", err)
+	}
+}
+
 func TestCodeExecutionPassesStdin(t *testing.T) {
 	root := newGoModule(t, map[string]string{
 		"main.go": `package main
