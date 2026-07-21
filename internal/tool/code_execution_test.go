@@ -47,10 +47,10 @@ func main() {
 }
 
 func TestCodeExecutionEnvironmentUsesAllowlist(t *testing.T) {
+	goTempDir := filepath.Join(t.TempDir(), "go-work")
 	for _, key := range codeExecutionEnvironmentAllowlist {
 		t.Setenv(key, "allowed-"+key)
 	}
-	goTempDir := filepath.Join(t.TempDir(), "go-work")
 	t.Setenv("GOTMPDIR", "outside-go-work")
 	t.Setenv("GOWORK", "outside.work")
 	t.Setenv("LLM_API_KEY", "llm-secret")
