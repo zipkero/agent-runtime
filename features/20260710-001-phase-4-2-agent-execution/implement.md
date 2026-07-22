@@ -126,7 +126,7 @@
   - 참조: SPEC §5.9, SPEC §5.10, SPEC §5.11, SPEC §5.16, ANALYSIS §1, ANALYSIS §3, ANALYSIS §4,
     ANALYSIS §5.12
 
-- [ ] task-004: CLI를 Runner 기반 Agent 실행으로 전환
+- [x] task-004: CLI를 Runner 기반 Agent 실행으로 전환
   - 목적: CLI 사용자가 현재 작업 디렉터리 범위의 Phase 3·4.1 Tool을 Agent loop에서 사용하고 final assistant 응답 또는
     명확한 실패 출력을 확인할 수 있다.
   - 접근: `cmd/agent-runtime`에서 calculator, file read, web search, file save를 기본 등록하고 Code Execution은

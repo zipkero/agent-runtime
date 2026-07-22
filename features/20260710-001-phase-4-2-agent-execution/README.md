@@ -9,7 +9,7 @@ structured output 검증, provider-neutral Runner와 CLI 실행 경로를 추가
 
 - [x] SPEC
 - [x] ANALYSIS
-- [ ] IMPLEMENT
+- [x] IMPLEMENT
 
 ## 문서
 
@@ -28,3 +28,4 @@ structured output 검증, provider-neutral Runner와 CLI 실행 경로를 추가
 - 2026-07-15: Task 002 값 반환형 hook과 작업값 소유권 계약 확정
 - 2026-07-15: Task 의존성 기준 실행 순서 정리
 - 2026-07-16: 강제 Tool 종료와 process 수명 격리를 후속 Phase 4.4 범위로 분리
+- 2026-07-22: IMPLEMENT 완료
