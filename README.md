@@ -213,9 +213,10 @@ Single Agent 실행 구조를 담당합니다.
 * LLM 오류 상태 보존
 * 메모리 trace 기록
 
-Phase 3에서는 등록된 Tool registry가 있으면 assistant 응답의 tool call을 실행하고, tool result를 메시지에
-누적한 뒤 다음 LLM 판단을 이어간다. registry가 없으면 기존처럼 `needs_action` 상태로 멈춘다.
-Middleware hook, structured output, streaming runner는 이후 Phase에서 확장한다.
+등록된 Tool registry가 있으면 assistant 응답의 tool call을 실행하고, tool result를 메시지에 누적한 뒤 다음 LLM
+판단을 이어간다. registry가 없으면 기존처럼 `needs_action` 상태로 멈춘다. Phase 4.2에서는 model 호출 전후
+middleware, structured output 검증, provider-neutral Single Agent Runner와 CLI 실행 경로까지 확장했다. Streaming
+Runner는 Phase 4.3에서 확장한다.
 
 ### `internal/tool`
 

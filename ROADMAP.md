@@ -27,7 +27,7 @@ Runtime 본체는 직접 만들고, 외부 연결(LLM·임베딩·웹 검색·�
 [x] Phase 1  LLM Client          (Claude + Ollama 로컬 provider)
 [x] Phase 2  Agent Loop
 [x] Phase 3  Tool Calling Runtime
-[ ] Phase 4  Single Agent Runtime (4.1 Tool 묶음 / 4.2 실행 구조 / 4.3 Streaming / 4.4 Tool 실행 backend)
+[ ] Phase 4  Single Agent Runtime (진행 중: 4.1 Tool 묶음·4.2 실행 구조 완료 / 4.3 Streaming·4.4 Tool 실행 backend 예정)
 [ ] Phase 5  RAG Runtime          (5.1 인덱싱 / 5.2 검색·활용)
 [ ] Phase 6  Memory Runtime       (6.1 단기 메모리 / 6.2 장기 메모리 & Tool)
 [ ] Phase 7  Multi-Agent Runtime  (7.1 Worker·Routing / 7.2 Orchestrator-Workers / 7.3 구체 Worker)
@@ -206,7 +206,7 @@ internal/agent
 
 ---
 
-## Phase 4. Single Agent Runtime — 예정
+## Phase 4. Single Agent Runtime — 진행 중
 
 ### 목표
 
@@ -218,32 +218,33 @@ Tool Calling이 가능한 Single Agent를 구현한다.
 네 갈래로 나눴다. 소수점 번호는 4.1 → 4.2 → 4.3 → 4.4 순서의 진행 단위를 뜻한다. 4.4는 4.2의 Tool 실행 수명
 계약 위에 세우되, 기존 번호와 문서 참조를 유지하기 위해 4.3 이후에 진행한다.
 
-#### Phase 4.1 — Tool 묶음
+#### Phase 4.1 — Tool 묶음 — 완료
 
 * Web Search Tool (Tavily 검색 API 연동)
 * File Save Tool
 * Code Execution Tool
 
-#### Phase 4.2 — Agent 실행 구조 (4.1 이후)
+#### Phase 4.2 — Agent 실행 구조 — 완료
 
 * Middleware hook (pre / post model)
 * Structured Output
 * Single Agent runner
 * agent loop 기반 Single Agent 실행
 
-#### Phase 4.3 — Streaming Agent Response (4.2 이후)
+#### Phase 4.3 — Streaming Agent Response — 예정
 
 * Provider-neutral streaming LLM contract
-* Runner streaming event
-* CLI streaming 출력
+* Runner streaming event (Phase 4.3은 model text와 final/error 결과를 공개)
+* CLI streaming 출력과 interactive terminal의 final-only 화면 정리
 * streaming 완료 후 final response 조립
 * Structured Output final 검증과 streaming 관계 정리
 
-#### Phase 4.4 — Tool Execution Backend (4.2 기반, 4.3 이후 진행)
+#### Phase 4.4 — Tool Execution Backend — 예정 (4.2 기반, 4.3 이후 진행)
 
 * Agent의 Tool 호출 판단과 실제 실행 방식을 분리하는 Tool execution backend
 * 기존 in-process Tool의 context 기반 cooperative cancellation을 유지하는 inline executor
 * 강제 종료가 필요한 Runtime 소유 Tool을 위한 process-backed executor
+* Tool 호출 시작·결과·오류·timeout을 Runner에서 관찰하는 Tool lifecycle event
 * 실행 요청 ID, Tool 이름, arguments, deadline, result를 전달하는 직렬화 가능한 실행 envelope
 * timeout 시 cancel 요청, grace period, process kill, process 종료 회수
 * Tool 오류, timeout, Tool process crash의 구분과 trace 기록
@@ -657,10 +658,10 @@ User Request
 02. Agent Loop                                  [x]
 03. Tool Calling Runtime                        [x]
 04. Single Agent Runtime                        [ ]
-    04.1 Tool 묶음
-    04.2 Agent 실행 구조
-    04.3 Streaming Agent Response
-    04.4 Tool Execution Backend
+    04.1 Tool 묶음                              [x]
+    04.2 Agent 실행 구조                        [x]
+    04.3 Streaming Agent Response                [ ]
+    04.4 Tool Execution Backend                  [ ]
 05. RAG Runtime                                 [ ]
     05.1 인덱싱 파이프라인
     05.2 검색·활용
