@@ -97,7 +97,7 @@ Final 통합
 
 ## 프로젝트 구조
 
-아래는 목표 구조입니다. Phase 3 기준으로 `cmd/agent-runtime`, `internal/config`, `internal/llm`,
+아래는 목표 구조입니다. Phase 4.2 기준으로 `cmd/agent-runtime`, `internal/config`, `internal/llm`,
 `internal/message`, `internal/agent`, `internal/tool`, `.env.example`, `.gitignore`, `README.md`, `ROADMAP.md`가
 존재하며, 나머지 Runtime 패키지는 이후 Phase에서 차례로 만들어집니다.
 
@@ -132,10 +132,12 @@ agent-runtime/
 
 Runtime 실행 진입점입니다.
 
-Phase 1에서는 단발 CLI 실행 경로를 제공합니다. positional argument가 있으면 이를 prompt로 사용하고, 인자가
-없으면 stdin 전체를 prompt로 읽어 설정된 LLM provider를 한 번 호출합니다.
+positional argument가 있으면 이를 prompt로 사용하고, 인자가 없으면 stdin 전체를 prompt로 읽습니다. Phase 1의
+단발 provider 호출 경로는 Phase 4.2에서 Single Agent 실행 경로로 확장되어, 설정된 provider와 등록된 Tool로
+agent loop을 돌린 뒤 final answer를 만듭니다.
 
-성공 시 provider 응답 text만 stdout에 출력하고, 입력·설정·provider 오류는 stderr와 non-zero exit로 처리합니다.
+성공 시 final answer만 stdout에 출력하고, 입력·설정·실행 오류는 stderr와 non-zero exit로 처리합니다. 진단 로그도
+stderr로 보내 stdout을 실행 결과 전용으로 유지하므로, 출력을 그대로 pipe나 파일로 넘길 수 있습니다.
 HTTP API 또는 Agent Server 형태로의 확장은 본 로드맵 범위 밖의 확장 과제로 다룹니다.
 
 실행 예시는 다음과 같습니다.
@@ -165,7 +167,8 @@ echo "요약해줘" | go run ./cmd/agent-runtime
 | `LLM_API_KEY`                      | claude provider 호출 키        | Phase 1        |
 | `LLM_TIMEOUT`                      | LLM 호출 timeout               | Phase 1        |
 | `TAVILY_API_KEY`                   | 웹 검색 Tool                   | Phase 4.1      |
-| `LOG_LEVEL`                        | CLI 기본 로그 레벨              | Phase 0        |
+| `ENABLE_CODE_EXECUTION`            | Code Execution Tool 등록 여부   | Phase 4.2      |
+| `LOG_LEVEL`                        | CLI stderr 로그 레벨            | Phase 0        |
 | Postgres DSN (Phase 5.1에서 추가)    | pgvector / 장기 메모리          | Phase 5.1      |
 
 ### `internal/llm`
@@ -431,10 +434,13 @@ Agent는 실행 과정이 중요합니다.
 * token usage
 
 이 필드들은 한 번에 갖춰지지 않고, 각 Phase가 자신이 도입한 정보를 더하며 자랍니다. step과 action은 Phase 2,
-tool call / tool result는 Phase 3, agent는 Phase 7에서 더해집니다. error는 Phase 2의 error state에서 시작해
-Phase 3의 tool error handling으로 확장되고, latency / model / token usage는 LLM·Runner 계층에서 채워지며,
+tool call / tool result는 Phase 3, latency / model / token usage는 Phase 4.3의 model 호출 경계, agent는 Phase 7에서
+더해집니다. error는 Phase 2의 error state에서 시작해 Phase 3의 tool error handling으로 확장되고,
 trace 구조 자체는 Phase 2에서 한 번 세우고 이후엔 같은 구조에 필드만 더해, Phase 11은 필드 이름 통일·
 중복 제거 같은 마무리만 합니다. 각 Phase의 실제 진행 상태는 `ROADMAP.md`가 소유합니다.
+
+trace는 메모리 구조이므로 그 자체로는 관찰할 수 없습니다. CLI는 `LOG_LEVEL=debug`일 때 run이 끝난 trace를
+stderr로 함께 출력해, 각 Phase 완료 시 실행 흐름을 확인할 수 있게 합니다.
 
 ## 최종 산출물
 

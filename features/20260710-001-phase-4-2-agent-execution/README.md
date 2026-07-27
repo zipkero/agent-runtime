@@ -29,3 +29,5 @@ structured output 검증, provider-neutral Runner와 CLI 실행 경로를 추가
 - 2026-07-15: Task 의존성 기준 실행 순서 정리
 - 2026-07-16: 강제 Tool 종료와 process 수명 격리를 후속 Phase 4.4 범위로 분리
 - 2026-07-22: IMPLEMENT 완료
+- 2026-07-27: ANALYSIS 「확인한 사실」의 Code Execution 허용 서브커맨드 목록 정정 (`go run`·`go test` 2개 →
+  `env`·`list`·`run`·`test`·`version` 5개)

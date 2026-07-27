@@ -28,8 +28,8 @@
 - `MaxSteps`는 model 호출 수만 제한하고 한 응답의 Tool call 수, File Read·Web Search result 크기, 전체 run 시간은
   제한하지 않는다. Claude와 Ollama adapter는 provider의 raw stop reason을 보존하지만 Agent는 이를 상태 전이에 사용하지
   않는다.
-- Code Execution은 `go run`과 `go test`를 허용하고 `os.Environ()` 전체를 자식 process에 전달한다. 현재 CLI는 아직
-  Tool을 등록하지 않지만 Task 004의 기존 계획은 모든 Tool을 기본 등록하도록 되어 있다.
+- Code Execution은 `env`, `list`, `run`, `test`, `version` 서브커맨드를 허용하고 `os.Environ()` 전체를 자식 process에
+  전달한다. 현재 CLI는 아직 Tool을 등록하지 않지만 Task 004의 기존 계획은 모든 Tool을 기본 등록하도록 되어 있다.
 - Config는 parse 가능한 `LLM_TIMEOUT`이면 0이나 음수도 허용한다. 현재 CLI의 `context.WithTimeout`과 Runner의
   `ModelTimeout > 0` 조건은 비양수 값을 서로 다르게 해석한다.
 - 현재 `go.mod`에는 외부 module 의존성이 없다. Go 표준 `encoding/json`은 JSON 파싱은 제공하지만 JSON Schema

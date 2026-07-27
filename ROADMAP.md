@@ -17,7 +17,7 @@
 Runtime 본체는 직접 만들고, 외부 연결(LLM·임베딩·웹 검색·벡터 저장·MCP·A2A)은 공식 SDK 또는 HTTP로 처리한다.
 단계별 예제 폴더는 만들지 않는다.
 하나의 Runtime을 계속 발전시킨다.
-진행 상태는 docs, commit, tag로 추적한다.
+진행 상태는 docs와 commit으로 추적한다.
 ```
 
 ## 진행 현황
@@ -50,7 +50,7 @@ Go 기반 Agent Runtime 프로젝트의 기본 구조를 만든다.
 * Go module 생성
 * 기본 디렉터리 구조 구성
 * config loader
-* logger (별도 패키지 없이 진입점에서 config 설정으로 초기화)
+* logger (별도 패키지 없이 진입점에서 config 설정으로 초기화, stderr 출력)
 * CLI entry point
 * `.env` 로딩
 * 기본 README / ROADMAP 문서 작성
@@ -66,7 +66,7 @@ internal/config
 
 * `go run ./cmd/agent-runtime` 실행 가능
 * 환경변수 로딩 가능
-* 기본 로그 출력 가능
+* `LOG_LEVEL` 기반 기본 로그를 stderr로 출력 가능 (stdout은 실행 결과 전용)
 * 프로젝트 목적과 진행 방식이 README에 정리됨
 
 ---
@@ -235,9 +235,10 @@ Tool Calling이 가능한 Single Agent를 구현한다.
 
 * Provider-neutral streaming LLM contract
 * Runner streaming event (Phase 4.3은 model text와 final/error 결과를 공개)
-* CLI streaming 출력과 interactive terminal의 final-only 화면 정리
+* CLI streaming 출력과 interactive terminal의 final-only 화면 정리 (임시 출력은 한 줄로 제한)
 * streaming 완료 후 final response 조립
 * Structured Output final 검증과 streaming 관계 정리
+* trace의 model 호출 정보 (model 이름 / latency / token usage)
 
 #### Phase 4.4 — Tool Execution Backend — 예정 (4.2 기반, 4.3 이후 진행)
 
@@ -703,9 +704,12 @@ User Request
 각 Phase는 다음 조건을 만족하기 전까지 다음 Phase로 넘어가지 않는다.
 
 * 실행 가능한 Runtime 상태가 있고, CLI에서 실제로 한 번 돌려 그 Phase까지 도입된 trace 범위로 실행 흐름을 확인했다.
+  trace는 `LOG_LEVEL=debug`로 실행해 stderr에서 확인한다.
 * 해당 단계 개념이 코드에 반영되어 있다.
+* 앞 Phase의 완료 기준이 현재 코드에서 여전히 성립하는지 확인했다. 이번 Phase의 변경이 앞 기준을 무효화했다면
+  기준을 갱신하거나 동작을 복원한 뒤 넘어간다.
 * README 또는 ROADMAP에 현재 상태가 반영되어 있다.
-* 최소 하나 이상의 실패 케이스가 정리되어 있다.
+* 최소 하나 이상의 실패 케이스가 해당 feature의 `spec.md` 「제약」과 실패 경로 테스트로 정리되어 있다.
 
 외부 의존이 필요한 Phase는 위 "CLI 1회 실행" 확인에 해당 인프라·키 준비가 전제된다. LLM API key는 Phase 1,
 Tavily API key는 Phase 4.1, Postgres + pgvector는 Phase 5.1에서 처음 필요하며, Phase 6.2는 Phase 5의
