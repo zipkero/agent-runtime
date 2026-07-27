@@ -23,3 +23,5 @@ text를 생성되는 순서대로 전달하면서도 Tool loop, middleware, stru
 - 2026-07-24: SPEC 작성
 - 2026-07-24: ANALYSIS 작성
 - 2026-07-24: IMPLEMENT 체크리스트 작성
+- 2026-07-27: interactive renderer를 한 줄 갱신 방식으로 변경(terminal 스크롤·delta 없는 run 대응), model 호출
+  trace 필드를 범위에 추가

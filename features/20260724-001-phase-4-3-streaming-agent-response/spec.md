@@ -12,9 +12,12 @@ Phase 4.3에서 호출자에게 공개하는 streaming 정보는 model text 조�
 Tool 호출·결과·오류·timeout의 공개 lifecycle event는 Phase 4.4에서 다룬다.
 
 CLI는 별도 활성화 옵션 없이 streaming 실행을 기본으로 사용한다. Interactive terminal에서는 생성 중인 model text를
-임시 영역에 순서대로 표시하고, 정상 종료하면 임시 내용을 정리한 뒤 최종 answer만 남긴다. Stdout이 pipe나 파일로
-redirect된 경우에는 terminal 제어 문자를 쓰지 않고 최종 answer만 한 번 출력한다. Streaming 오류는 stderr와 0이 아닌
-종료 코드로 확인할 수 있어야 한다.
+한 줄 임시 영역에 도착 순서대로 갱신해 보여주고, 정상 종료하면 그 줄을 정리한 뒤 최종 answer만 남긴다. Stdout이
+pipe나 파일로 redirect된 경우에는 terminal 제어 문자를 쓰지 않고 최종 answer만 한 번 출력한다. Streaming 오류는
+stderr와 0이 아닌 종료 코드로 확인할 수 있어야 한다.
+
+Runner는 각 model 호출의 model 이름, 호출 소요 시간과 token usage를 trace에 기록한다. 이 기록은 streaming과
+non-streaming 경로에서 같은 의미를 가져야 한다.
 
 Structured output schema가 지정된 streaming run은 text 조각을 검증 전 임시 데이터로 전달한다. Runner는 전체
 최종 응답을 조립한 뒤 Phase 4.2와 같은 JSON 파싱과 schema 검증을 수행한다. 검증 성공 시에만 최종 성공 결과를
@@ -75,6 +78,10 @@ CLI는 positional argument 우선, argument가 없을 때 stdin 사용, final �
 0이 아닌 종료 코드라는 기존 입력·종료 contract를 유지한다. Interactive terminal의 임시 출력은 정상 종료 시
 정리해야 하며, redirect된 stdout은 정상 final 이외의 중간 text나 terminal 제어 문자를 포함하지 않아야 한다.
 
+Interactive 임시 출력은 한 줄을 넘지 않아야 한다. 임시 영역이 여러 줄로 늘어나면 terminal 스크롤 이후에는
+지워야 할 영역을 다시 계산할 수 없으므로, 정리 동작이 출력 길이와 terminal 높이에 의존해서는 안 된다.
+Text 조각이 한 번도 도착하지 않고 최종 결과로 끝나는 run에서도 정리 동작은 화면을 바꾸지 않아야 한다.
+
 테스트는 실제 외부 provider 호출 없이 local HTTP test server와 stub streaming client를 사용해 event 순서,
 응답 조립, Tool loop, middleware, structured output, 취소·timeout과 CLI 출력을 확인할 수 있어야 한다.
 
@@ -96,7 +103,8 @@ Provider별 native structured output 또는 constrained decoding, 부분 JSON sc
 Streaming 재연결, 중단 지점부터 자동 재개, provider fallback, retry, rate-limit backoff는 포함하지 않는다.
 
 Provider가 제공하는 thinking·reasoning 조각의 공개 출력, token 단위 latency 통계와 외부 observability 전송은
-포함하지 않는다.
+포함하지 않는다. Model 호출 단위의 소요 시간·model 이름·token usage를 trace에 남기는 것은 범위에 포함하지만,
+그 값을 집계·요약하거나 외부 시스템으로 내보내는 일은 포함하지 않는다.
 
 RAG, Memory, Multi-Agent, MCP, A2A 구현은 포함하지 않는다.
 
@@ -125,7 +133,8 @@ RAG, Memory, Multi-Agent, MCP, A2A 구현은 포함하지 않는다.
 11. 호출자가 context를 취소하거나 event 소비를 중단한 뒤에는 provider 요청과 Runner 실행이 종료되고, event 생산
     또는 goroutine이 background에서 계속되지 않는다.
 12. CLI는 별도 flag 없이 streaming Runner를 기본으로 사용한다. Interactive terminal에서는 model text 조각을
-    도착 순서대로 임시 표시하고, 정상 종료하면 임시 영역을 정리해 최종 answer만 남긴 뒤 종료 코드 0을 반환한다.
+    도착 순서대로 한 줄 임시 영역에 갱신해 표시하고, 정상 종료하면 그 줄을 정리해 최종 answer만 남긴 뒤
+    종료 코드 0을 반환한다. 임시 표시가 여러 줄로 늘어나거나 정리 결과가 terminal 높이에 의존해서는 안 된다.
 13. Stdout이 pipe나 파일로 redirect된 CLI 실행은 terminal 제어 문자와 중간 model text를 출력하지 않고, 정상
     final answer만 한 번 출력한다.
 14. 기존 `LLMClient.Chat`과 `Runner.Run` non-streaming 호출자는 변경 없이 전체 응답과 최종 결과를 받을 수 있다.
@@ -133,3 +142,7 @@ RAG, Memory, Multi-Agent, MCP, A2A 구현은 포함하지 않는다.
     Tool call 조립과 loop, middleware, structured output, 오류, 취소·timeout, CLI 기본 streaming 출력을 확인한다.
 16. CLI streaming 도중 오류가 발생하면 interactive terminal의 임시 영역을 종료 가능한 상태로 정리하고,
     redirect된 stdout에는 성공 final을 출력하지 않는다. 사용자는 stderr와 0이 아닌 종료 코드로 실패를 확인한다.
+17. Text 조각이 한 번도 도착하지 않은 run에서도 정상 종료와 오류 종료 모두 임시 영역 정리가 화면을 바꾸지 않고,
+    stdout 출력은 §5.12·§5.13·§5.16과 같은 결과를 유지한다.
+18. Runner는 streaming과 non-streaming 경로 모두에서 각 model 호출의 model 이름, 호출 소요 시간과 token usage를
+    trace에 기록하며, 호출자는 이를 기존 trace 구조에서 step·action과 함께 확인할 수 있다.

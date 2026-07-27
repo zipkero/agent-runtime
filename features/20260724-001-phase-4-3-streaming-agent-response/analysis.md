@@ -6,8 +6,12 @@
 
 - `spec.md`는 Claude와 Ollama의 provider별 stream을 Runtime 공통 계약으로 정규화하고, Runner가 모든 model 호출의
   text delta와 정확히 한 번의 final 또는 error 결과를 제공하도록 요구한다.
-- CLI는 별도 flag 없이 streaming Runner를 사용한다. Interactive terminal은 임시 text를 표시한 뒤 정상 종료 시
+- CLI는 별도 flag 없이 streaming Runner를 사용한다. Interactive terminal은 한 줄 임시 text를 표시한 뒤 정상 종료 시
   final answer만 남기고, redirect된 stdout은 중간 text와 terminal 제어 문자 없이 final answer만 한 번 출력한다.
+  `spec.md`는 임시 출력이 한 줄을 넘지 않고, 정리 동작이 출력 길이·terminal 높이에 의존하지 않으며, delta가 전혀
+  없는 run에서도 화면을 바꾸지 않을 것을 요구한다.
+- `spec.md`는 각 model 호출의 model 이름, 소요 시간, token usage를 streaming과 non-streaming 경로 모두에서 trace에
+  기록할 것을 요구한다. 현재 `TraceEvent`에는 이 세 값을 담을 필드가 없다.
 - Phase 4.3은 Tool lifecycle event를 공개하지 않는다. Tool 호출·결과·오류·timeout event와 execution backend는
   Phase 4.4 범위다.
 - `internal/llm.LLMClient`는 현재 `Chat(ctx, ChatRequest) (ChatResponse, error)`만 제공한다. 기존 custom client도 이
@@ -267,6 +271,29 @@ Model timeout context는 caller 전체를 감싸므로 첫 byte 대기뿐 아니
 적용한다. Pre-model과 post-model은 caller 밖의 공통 loop에 남겨 두 경로의 순서를 일치시킨다
 (`SPEC §5.2`, `SPEC §5.5`, `SPEC §5.6`, `SPEC §5.10`).
 
+### Model 호출 trace
+
+`TraceEvent`에 model 이름, 호출 소요 시간, token usage를 담는 필드를 더한다. 기존 필드는 그대로 두고, Phase 2에서
+세운 단일 trace 구조에 필드만 추가하는 방식을 유지한다.
+
+```go
+type TraceEvent struct {
+	// 기존 필드는 변경하지 않는다.
+	Model   string
+	Latency time.Duration
+	Usage   llm.Usage
+}
+```
+
+값을 채우는 자리는 공통 loop의 `TraceActionLLMResponse` 기록 지점 하나다. Model caller 호출 직전에 시간을 재고,
+완성 response를 받은 뒤 응답의 model 이름과 `Usage`를 함께 기록한다. Streaming과 non-streaming이 같은 loop와 같은
+caller 경계를 공유하므로 두 경로가 자동으로 같은 의미를 갖는다. 이 값은 완성 response가 있을 때만 채워지므로 provider
+오류·중단으로 끝난 step에서는 비어 있고, 세 필드는 기존 event 종류에서는 zero value로 남는다
+(`SPEC §5.18`).
+
+Latency는 model 호출 한 번의 실제 소요 시간이며, streaming에서는 마지막 response event까지를 포함한다. Token 단위
+통계나 집계·외부 전송은 SPEC 제외 범위이므로 다루지 않는다.
+
 ### CLI renderer
 
 CLI는 stdout writer와 `interactive` 판정을 renderer에 주입한다. `main`은 실제 `os.Stdout`의 file mode가 character
@@ -282,10 +309,17 @@ type streamRenderer interface {
 }
 ```
 
-Interactive 구현은 첫 delta에서 cursor를 저장하고 모든 delta를 즉시 쓴다. `Finish`는 cursor를 복원하고 아래 영역을
-지운 뒤 final answer와 개행을 쓴다. `Reset`은 오류나 non-final 상태에서 cursor와 terminal 영역만 복구한다.
-Redirect 구현은 `WriteDelta`를 무시하고 `Finish`에서 final answer만 쓴다. ANSI cursor 제어는 interactive 구현
-안에만 존재한다(`SPEC §5.12`, `SPEC §5.13`, `SPEC §5.16`).
+Interactive 구현은 임시 출력을 한 줄로 제한한다. 누적 text의 마지막 부분을 terminal 폭에 맞게 자른 뒤, 매 delta마다
+`\r`로 줄 맨 앞으로 돌아가 그 줄만 다시 쓴다. `Finish`는 같은 줄을 지우고 커서를 줄 맨 앞으로 돌린 다음 final answer와
+개행을 쓴다. `Reset`은 오류나 non-final 상태에서 그 줄만 지운다. 아무 delta도 쓰지 않았다면 `Finish`와 `Reset`은
+지우는 동작을 건너뛰므로 화면을 바꾸지 않는다(`SPEC §5.17`).
+
+Cursor 저장·복원과 다중 행 삭제는 쓰지 않는다. 임시 영역이 한 줄이면 지워야 할 범위가 출력 길이나 terminal 높이와
+무관해지고, 긴 응답으로 화면이 스크롤해도 정리 동작이 깨지지 않는다. 사용하는 제어 문자는 `\r`과 줄 삭제뿐이다.
+Terminal 폭은 임시 줄을 자르는 데만 쓰이므로 확인할 수 없으면 보수적인 기본값으로 자른다.
+
+Redirect 구현은 `WriteDelta`를 무시하고 `Finish`에서 final answer만 쓴다. 제어 문자는 interactive 구현 안에만
+존재한다(`SPEC §5.12`, `SPEC §5.13`, `SPEC §5.16`, `SPEC §5.17`).
 
 ## 4. 영향 범위
 
@@ -303,8 +337,11 @@ Tool JSON 조립, usage·stop reason, SSE error, EOF와 timeout을 확인해야 
 timeout을 확인해야 한다.
 
 `internal/agent/agent.go`는 현재 `Run` loop를 공통 내부 함수로 추출하고 non-streaming·streaming model caller를
-연결한다. 기존 상태 전이, trace, Tool 제한과 `executeToolCall` 계약은 유지한다. Streaming test는 여러 model step의
-delta 순서, 완성 Tool call 이후 실행, middleware 실패 이후 중단, deadline과 consumer 조기 중단을 확인해야 한다.
+연결한다. 기존 상태 전이, trace, Tool 제한과 `executeToolCall` 계약은 유지한다. `TraceEvent`에는 model·latency·usage
+필드를 더하고 `TraceActionLLMResponse` 기록 지점에서 채운다. 기존 필드와 event 종류는 바꾸지 않으므로 기존 trace
+검증 테스트는 그대로 통과해야 한다. Streaming test는 여러 model step의 delta 순서, 완성 Tool call 이후 실행,
+middleware 실패 이후 중단, deadline과 consumer 조기 중단을 확인하고, 두 경로가 같은 model·latency·usage 기록 의미를
+갖는지 확인해야 한다.
 
 `internal/agent/runner.go`는 `RunStream`, Runner event, terminal result 조립을 추가한다. `Run`과 `RunStream`이 같은
 structured output finalization helper를 사용하게 해 validator 의미를 공유한다. Runner test는 final/error event
@@ -314,9 +351,9 @@ structured output finalization helper를 사용하게 해 validator 의미를 �
 finalization에서 기존 helper를 재사용하므로 관련 테스트가 streaming 경로에서도 같은 순서와 오류 분류를 검증한다.
 
 `cmd/agent-runtime/main.go`는 `Runner.Run` 대신 `RunStream`을 소비하고 stdout 성격에 따라 renderer를 선택한다.
-Renderer는 별도 파일로 분리해 terminal 제어와 run 조립 책임을 나눈다. CLI 테스트는 주입된 interactive 판정과
-기록 writer로 delta 즉시 표시, final-only 화면 sequence, redirect final-only bytes, 오류 reset과 stderr·종료 코드를
-확인해야 한다.
+Renderer는 별도 파일로 분리해 terminal 제어와 run 조립 책임을 나눈다. CLI 테스트는 주입된 interactive 판정,
+terminal 폭과 기록 writer로 delta 즉시 표시, 한 줄 갱신과 자르기, final-only 화면 sequence, redirect final-only bytes,
+delta 없는 run에서 화면 무변경, 오류 reset과 stderr·종료 코드를 확인해야 한다.
 
 `internal/message`, `internal/tool`, `internal/config`의 contract와 환경변수는 바뀌지 않는다. Streaming flag나
 새 설정도 추가하지 않는다. 표준 `iter`, `bufio`, `encoding/json`, `net/http`와 terminal 제어 문자열로 구현할 수 있어
@@ -404,13 +441,19 @@ Renderer는 별도 파일로 분리해 terminal 제어와 run 조립 책임을 �
 
 9. CLI final-only 화면
    - 옵션 A: 모든 delta를 stdout에 append하고 final도 이어서 출력한다.
-   - 옵션 B: Interactive terminal은 cursor를 저장해 임시 delta를 표시한 뒤 지우고 final을 다시 출력하며,
-     redirect는 delta를 무시한다.
+   - 옵션 B: Interactive terminal은 cursor를 저장해 여러 줄 임시 delta를 표시한 뒤 그 영역을 지우고 final을 다시
+     출력하며, redirect는 delta를 무시한다.
    - 옵션 C: Full-screen TUI library를 도입한다.
-   - Trade-off: A는 Tool step 중간 text가 최종 출력에 남고 redirect 출력도 오염된다. B는 최소 ANSI renderer와
-     terminal 판별이 필요하지만 final-only UX와 pipe 계약을 모두 만족한다. C는 가장 풍부하지만 명시적 제외 범위다.
-   - 채택안: 옵션 B. Renderer 동작은 stdout이 character device인지 여부를 명시적으로 주입해 테스트한다.
-   - 근거: `SPEC §5.12`, `SPEC §5.13`, `SPEC §5.16`의 사용자 확정 UX다.
+   - 옵션 D: Interactive terminal은 임시 delta를 terminal 폭으로 자른 한 줄에만 갱신해 표시하고, 정리할 때 그 줄만
+     지운 뒤 final을 출력하며, redirect는 delta를 무시한다.
+   - Trade-off: A는 Tool step 중간 text가 최종 출력에 남고 redirect 출력도 오염된다. B는 final-only UX와 pipe 계약을
+     만족하지만, 임시 출력이 화면 높이를 넘겨 스크롤하면 저장한 cursor 위치가 무효해져 정리 범위를 다시 계산할 수
+     없다. 이 기능 자체가 긴 응답을 대상으로 하므로 스크롤은 예외 상황이 아니다. C는 가장 풍부하지만 명시적 제외
+     범위다. D는 진행 표시를 한 줄로 줄이는 대신 정리 범위가 출력 길이·terminal 높이와 무관해지고, delta가 없는
+     run에서 지울 것이 없다는 처리가 자연히 따라온다.
+   - 채택안: 옵션 D. Renderer 동작은 stdout이 character device인지 여부를 명시적으로 주입해 테스트한다.
+   - 근거: `SPEC §5.12`, `SPEC §5.13`, `SPEC §5.16`, `SPEC §5.17`은 정리 동작이 출력 길이와 terminal 높이에 의존하지
+     않고 delta 없는 run에서도 화면을 바꾸지 않을 것을 요구한다. 옵션 B는 이 조건을 스크롤 상황에서 만족하지 못한다.
 
 10. Terminal 판별과 의존성
     - 옵션 A: `os.File.Stat`의 character device 여부를 사용한다.
@@ -418,8 +461,10 @@ Renderer는 별도 파일로 분리해 terminal 제어와 run 조립 책임을 �
     - 옵션 C: 항상 interactive renderer를 사용한다.
     - Trade-off: A는 표준 library만 사용하고 pipe·일반 파일을 구분할 수 있다. B는 terminal 판별 helper를
       제공하지만 현재 완료 조건에 필요하지 않은 의존성을 추가한다. C는 redirect에 제어 문자를 흘린다.
-    - 채택안: 옵션 A. 실제 판별 결과를 `run` 경계에 주입해 renderer 로직과 분리한다.
-    - 근거: `SPEC §5.13`을 새 의존성 없이 만족하고 기존 CLI 테스트 방식을 유지한다.
+    - 채택안: 옵션 A. 실제 판별 결과를 `run` 경계에 주입해 renderer 로직과 분리한다. Terminal 폭도 같은 방식으로
+      주입하고, 확인할 수 없으면 보수적인 기본값을 쓴다.
+    - 근거: `SPEC §5.13`을 새 의존성 없이 만족하고 기존 CLI 테스트 방식을 유지한다. 폭은 임시 줄을 자르는 데만
+      쓰이므로 부정확해도 정리 동작이 깨지지 않는다.
 
 11. Claude SSE 처리
     - 옵션 A: 고정 크기 `bufio.Scanner` token으로 data line을 읽는다.
