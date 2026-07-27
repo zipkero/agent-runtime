@@ -46,12 +46,15 @@ func (c *runStubClient) Chat(ctx context.Context, req llm.ChatRequest) (llm.Chat
 	return c.responses[index], nil
 }
 
+// testConfig 함수는 진단 로그를 끈 설정을 만든다. 로그 레벨을 error로 두면 stderr에는
+// 사용자에게 보여줄 출력만 남아 기존 stdout/stderr 계약을 그대로 검증할 수 있다.
 func testConfig() config.Config {
 	return config.Config{
 		LLMProvider: "ollama",
 		LLMModel:    "ollama-test",
 		LLMHost:     "http://localhost:11434",
 		LLMTimeout:  2 * time.Second,
+		LogLevel:    "error",
 	}
 }
 

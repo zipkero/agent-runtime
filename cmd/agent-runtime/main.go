@@ -52,6 +52,20 @@ func run(
 		return 1
 	}
 
+	logger, err := newLogger(stderr, cfg.LogLevel)
+	if err != nil {
+		fmt.Fprintf(stderr, "config error: %v\n", err)
+		return 1
+	}
+	logger.Info("starting",
+		"provider", cfg.LLMProvider,
+		"model", cfg.LLMModel,
+		"host", cfg.LLMHost,
+		"timeout", cfg.LLMTimeout,
+		"log_level", cfg.LogLevel,
+		"code_execution", cfg.EnableCodeExecution,
+	)
+
 	client, err := buildClient(cfg)
 	if err != nil {
 		fmt.Fprintf(stderr, "config error: %v\n", err)
@@ -68,6 +82,7 @@ func run(
 		fmt.Fprintf(stderr, "tool configuration error: %v\n", err)
 		return 1
 	}
+	logger.Info("tools registered", "count", tools.Len(), "root", root)
 
 	runner, err := agent.NewRunner(agent.RunnerOptions{
 		Client:             client,
@@ -87,6 +102,9 @@ func run(
 	defer cancel()
 
 	result := runner.Run(ctx, prompt)
+	logger.Info("run finished", "status", string(result.State.Status), "steps", result.State.Step)
+	logTrace(logger, result.State.Trace)
+
 	if result.State.Status == agent.StatusFinal {
 		fmt.Fprintln(stdout, result.State.FinalAnswer)
 		return 0

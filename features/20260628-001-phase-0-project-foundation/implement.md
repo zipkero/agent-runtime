@@ -16,13 +16,15 @@
   - 참조: SPEC §5.2, SPEC §5.4, SPEC §5.5, ANALYSIS §1, ANALYSIS §2, ANALYSIS §5
 
 - [x] task-002: Go module과 CLI 진입점 작성
-  - 목적: 저장소 루트에서 `go run ./cmd/agent-runtime`을 실행하면 성공 상태로 종료되고 기본 로그가 출력된다.
+  - 목적: 저장소 루트에서 `go run ./cmd/agent-runtime "<prompt>"`를 실행하면 성공 상태로 종료되고 기본 로그가
+    출력된다. Prompt가 없으면 입력 오류로 종료한다.
   - 접근: `go.mod`의 module path를 `github.com/zipkero/agent-runtime`으로 만들고, `cmd/agent-runtime/main.go`에서
     `internal/config`를 호출한다. logger는 별도 패키지 없이 진입점에서 초기화하고, 비밀값을 제외한 시작 정보를
-    출력한다.
+    stderr로 출력한다. 출력 레벨은 `LOG_LEVEL`을 해석해 정한다.
   - 검증 조건:
-    - 결과: `cmd/agent-runtime` CLI가 config 로딩 결과를 사용해 기본 로그를 출력하고 외부 provider 호출 없이 종료된다.
-    - 확인: `go test ./...`와 `go run ./cmd/agent-runtime`을 실행해 빌드, 테스트, 실행 성공, 기본 로그 출력을 확인한다.
+    - 결과: `cmd/agent-runtime` CLI가 config 로딩 결과를 사용해 기본 로그를 stderr로 출력하고 외부 provider 호출 없이 종료된다.
+    - 확인: `go test ./...`와 `go run ./cmd/agent-runtime "<prompt>"`를 실행해 빌드, 테스트, 실행 성공, 기본 로그
+      출력을 확인하고, 인자 없는 실행이 입력 오류로 끝나는지 확인한다.
   - 참조: SPEC §5.1, SPEC §5.3, SPEC §5.4, ANALYSIS §1, ANALYSIS §2, ANALYSIS §3, ANALYSIS §5
 
 - [x] task-003: Phase 0 문서와 ignore 규칙 정합성 확인

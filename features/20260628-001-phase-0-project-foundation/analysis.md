@@ -46,6 +46,10 @@ logger는 별도 패키지를 만들지 않고 `cmd/agent-runtime`에서 표준 
 `internal/config`가 제공하고, 실제 logger 객체 생성과 출력은 진입점 책임으로 둔다. 이렇게 하면 Phase 0에서
 logger 공통 추상화를 새로 만들지 않으면서도 기본 로그 출력 완료 조건을 만족한다(SPEC §5.3).
 
+출력 대상은 stderr로 고정하고 `LOG_LEVEL`을 logger 레벨로 해석한다. stdout은 이후 Phase가 실행 결과를 싣는
+경로이므로 진단 출력과 분리해야 하며, 이 분리를 Phase 0에서 미리 고정하면 이후 CLI 재작성이 로그 경로를
+지우지 않는다(SPEC §5.3).
+
 ## 2. 데이터 흐름
 
 실행 흐름은 저장소 루트에서 `go run ./cmd/agent-runtime`을 호출하는 것으로 시작한다. Go toolchain은 `go.mod`를
@@ -57,11 +61,11 @@ logger 공통 추상화를 새로 만들지 않으면서도 기본 로그 출력
 무시하고, `KEY=VALUE` 형식을 읽는다. 동일한 key가 `.env`와 실제 환경변수에 모두 있으면 실제 환경변수가 이긴다.
 이 흐름은 `.env.example`의 주석과 일치하며 SPEC §5.2, SPEC §5.5의 관찰 기준이 된다.
 
-`Config` 생성 뒤 main 함수는 로그 레벨 설정을 해석해 기본 logger를 초기화하고 시작 정보를 출력한다. 출력에는
+`Config` 생성 뒤 main 함수는 로그 레벨 설정을 해석해 stderr logger를 초기화하고 시작 정보를 출력한다. 출력에는
 프로그램 시작, 선택된 provider, model, timeout처럼 비밀값이 아닌 설정만 포함한다. `LLM_API_KEY` 같은 비밀값은
 로그에 출력하지 않는다. Phase 0은 외부 provider를 호출하지 않으므로, 설정값이 비어 있어도 provider별 필수성으로
-실행 실패시키지 않는다. 실행은 성공 상태로 종료되어 `go run ./cmd/agent-runtime` 완료 조건을 만족한다
-(SPEC §5.1, SPEC §5.3).
+실행 실패시키지 않는다. Prompt를 준 실행은 성공 상태로 종료되어 `go run ./cmd/agent-runtime "<prompt>"` 완료
+조건을 만족한다(SPEC §5.1, SPEC §5.3).
 
 실패 흐름은 설정 파일 접근 자체가 아니라 파싱 가능한 형식과 timeout 값처럼 Phase 0에서 직접 해석하는 값에만
 둔다. `.env` 파일이 없으면 정상 진행하고, `.env` 파일에 잘못된 줄이나 해석 불가능한 duration 값이 있으면
@@ -71,8 +75,9 @@ logger 공통 추상화를 새로 만들지 않으면서도 기본 로그 출력
 
 ## 3. 인터페이스
 
-외부 실행 인터페이스는 `go run ./cmd/agent-runtime` 하나다. 인자나 subcommand는 Phase 0 완료 조건에 없으므로
-추가하지 않는다. 실행 결과는 성공 상태와 기본 로그 출력으로 관찰한다(SPEC §5.1, SPEC §5.3).
+외부 실행 인터페이스는 `go run ./cmd/agent-runtime` 하나다. Subcommand는 Phase 0 완료 조건에 없으므로 추가하지
+않고, prompt는 positional argument로 받는다. 실행 결과는 성공 상태와 기본 로그 출력으로 관찰한다
+(SPEC §5.1, SPEC §5.3).
 
 환경 설정 인터페이스는 `.env.example`에 공개된 환경변수 이름과 process environment다. 실제 환경변수는 `.env`
 값보다 높은 우선순위를 갖는다. 이 우선순위는 `.env.example`에 이미 문서화되어 있으므로 구현과 문서가 같은
@@ -136,6 +141,6 @@ Phase 0 구현과 맞지 않는 부분이 확인될 때만 갱신한다. `.env.e
    - 옵션 B: `internal/logger` 같은 별도 패키지를 만든다.
    - trade-off: 옵션 A는 `README.md`와 spec의 "별도 logger 패키지 없음" 제약을 따른다. 옵션 B는 재사용 지점은 만들지만,
      Phase 0 주요 패키지 범위를 넓힌다.
-   - 채택안: 옵션 A.
+   - 채택안: 옵션 A. 출력 대상은 stderr로 고정하고 `LOG_LEVEL`을 logger 레벨로 해석한다.
    - 근거: Phase 0 주요 패키지는 `cmd/agent-runtime`과 `internal/config`이고, 로그 초기화는 진입점 책임으로
-     명시되어 있다.
+     명시되어 있다. stdout을 비워 두면 이후 Phase가 실행 결과를 stdout에 실을 때 로그 경로를 지우지 않아도 된다.

@@ -14,7 +14,7 @@ Phase 0은 Go 기반 Agent Runtime 프로젝트를 이후 단계가 누적될 �
 
 Go 명령으로 실행 가능한 프로젝트 골격을 제공한다.
 개발자가 로컬 환경변수와 `.env` 파일을 통해 실행 설정을 로딩할 수 있게 한다.
-별도 logger 패키지 없이 CLI 진입점에서 설정값을 이용해 기본 로그를 출력할 수 있게 한다.
+별도 logger 패키지 없이 CLI 진입점에서 설정값을 이용해 기본 로그를 stderr로 출력할 수 있게 한다.
 최상위 문서가 프로젝트 목적, 진행 방식, Phase 진행 상태, 최종 목표 구조를 설명하도록 유지한다.
 
 ## 제약
@@ -25,6 +25,7 @@ Phase 0에서 새로 만드는 런타임 패키지는 `cmd/agent-runtime`과 `in
 `.env.example`에 둔다.
 실제 환경변수와 `.env` 값의 우선순위는 문서화되고 일관되게 동작해야 한다.
 로그 초기화는 진입점 책임으로 두며, 별도 logger 패키지를 만들지 않는다.
+로그는 stderr로만 출력한다. stdout은 이후 Phase가 실행 결과를 싣는 경로이므로 진단 출력과 섞지 않는다.
 
 ## 제외 범위
 
@@ -36,10 +37,12 @@ Phase 1 이후에 필요한 provider별 세부 설정 검증이나 tool별 필�
 
 ## 완료 조건
 
-1. `go run ./cmd/agent-runtime` 명령이 저장소 루트에서 실행 가능하고 성공 상태로 종료된다.
+1. `go run ./cmd/agent-runtime "<prompt>"` 명령이 저장소 루트에서 실행 가능하고, prompt가 주어지면 성공 상태로
+   종료된다. Prompt가 없으면 입력 오류로 종료한다. Phase 1이 provider 호출을 실행 경로에 넣은 뒤로 성공 종료
+   확인에는 설정된 provider가 전제되며, 입력 오류 경로는 provider 없이 확인할 수 있다.
 2. 실행 시 `internal/config`를 통해 실제 환경변수와 `.env` 파일의 값을 로딩할 수 있으며,
    우선순위가 문서화된 기준과 일치한다.
-3. 실행 시 CLI 진입점에서 설정값을 사용해 기본 로그를 출력한다.
+3. 실행 시 CLI 진입점에서 설정값을 사용해 기본 로그를 stderr로 출력하며, `LOG_LEVEL`이 출력 레벨을 결정한다.
 4. 저장소에는 `go.mod`, `cmd/agent-runtime`, `internal/config`, `.env.example`, `.gitignore`가 존재한다.
 5. `.env`는 git 추적 대상에서 제외되고, `.env.example`은 로컬 실행에 필요한 환경변수 이름과 사용법을 제공한다.
 6. 최상위 `README.md`와 `ROADMAP.md`가 프로젝트 목적, 단일 Runtime 진행 방식, Phase 진행 상태를 설명한다.
