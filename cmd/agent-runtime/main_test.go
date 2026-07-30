@@ -58,6 +58,8 @@ func testConfig() config.Config {
 	}
 }
 
+// TestRunExecutesToolLoopFromCurrentWorkingDirectory 는 CLI가 현재 작업 디렉터리를 Tool 루트로 삼아 tool loop를 끝내고,
+// 최종 답만 stdout에 쓰며 모델 호출마다 새 timeout을 주는지 확인한다.
 func TestRunExecutesToolLoopFromCurrentWorkingDirectory(t *testing.T) {
 	root := t.TempDir()
 	if err := os.WriteFile(filepath.Join(root, "note.txt"), []byte("hello tool"), 0o644); err != nil {
@@ -122,6 +124,7 @@ func TestRunExecutesToolLoopFromCurrentWorkingDirectory(t *testing.T) {
 	}
 }
 
+// TestRunUsesCurrentWorkingDirectoryForCodeExecution 은 code execution을 켠 실행에서 Tool이 현재 작업 디렉터리의 모듈을 대상으로 도는지 확인한다.
 func TestRunUsesCurrentWorkingDirectoryForCodeExecution(t *testing.T) {
 	root := t.TempDir()
 	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module example.com/cli-root\n\ngo 1.26\n"), 0o644); err != nil {
@@ -175,6 +178,7 @@ func TestRunUsesCurrentWorkingDirectoryForCodeExecution(t *testing.T) {
 	}
 }
 
+// TestRunReadsPromptFromStdin 은 인수가 없으면 stdin을 prompt로 읽고 앞뒤 공백을 제거하는지 확인한다.
 func TestRunReadsPromptFromStdin(t *testing.T) {
 	t.Chdir(t.TempDir())
 	stub := &runStubClient{responses: []llm.ChatResponse{{Message: message.Assistant("stdin answer")}}}
@@ -201,6 +205,7 @@ func TestRunReadsPromptFromStdin(t *testing.T) {
 	}
 }
 
+// TestRunAppliesOverallDeadline 은 LLM_TIMEOUT이 CLI 실행 제한보다 길면 실행 전체 deadline이 상한으로 남는지 확인한다.
 func TestRunAppliesOverallDeadline(t *testing.T) {
 	t.Chdir(t.TempDir())
 	stub := &runStubClient{responses: []llm.ChatResponse{{Message: message.Assistant("answer")}}}
@@ -230,6 +235,7 @@ func TestRunAppliesOverallDeadline(t *testing.T) {
 	}
 }
 
+// TestRunRejectsEmptyPromptWithoutCallingProvider 는 공백뿐인 prompt를 설정 로딩과 공급자 준비 이전에 거절하는지 확인한다.
 func TestRunRejectsEmptyPromptWithoutCallingProvider(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	called := false
@@ -267,6 +273,7 @@ func TestRunRejectsEmptyPromptWithoutCallingProvider(t *testing.T) {
 	}
 }
 
+// TestRunWritesAgentErrorsToStderr 는 Agent 오류를 stdout이 아닌 stderr로 보내고 오류 출력에 API key가 섞이지 않는지 확인한다.
 func TestRunWritesAgentErrorsToStderr(t *testing.T) {
 	t.Chdir(t.TempDir())
 	stub := &runStubClient{err: errors.New("provider unavailable")}
@@ -300,6 +307,7 @@ func TestRunWritesAgentErrorsToStderr(t *testing.T) {
 	}
 }
 
+// TestRunReportsRunnerCreationFailure 는 Runner 생성 실패를 stderr 오류와 실패 종료 코드로 알리는지 확인한다.
 func TestRunReportsRunnerCreationFailure(t *testing.T) {
 	t.Chdir(t.TempDir())
 	var stdout, stderr bytes.Buffer
@@ -322,6 +330,7 @@ func TestRunReportsRunnerCreationFailure(t *testing.T) {
 	}
 }
 
+// TestRunReportsNeedsAction 은 실행할 Tool이 없어 대기 상태로 끝나면 stdout을 비우고 상태만 stderr로 알리는지 확인한다.
 func TestRunReportsNeedsAction(t *testing.T) {
 	t.Chdir(t.TempDir())
 	stub := &runStubClient{responses: []llm.ChatResponse{{
@@ -352,6 +361,7 @@ func TestRunReportsNeedsAction(t *testing.T) {
 	}
 }
 
+// TestRunReportsMaxSteps 는 Tool 호출이 계속 이어지는 실행을 CLI step 상한까지만 돌리고 상태를 stderr로 알리는지 확인한다.
 func TestRunReportsMaxSteps(t *testing.T) {
 	t.Chdir(t.TempDir())
 	stub := &runStubClient{responses: []llm.ChatResponse{{

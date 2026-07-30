@@ -90,6 +90,7 @@ func (f FileRead) Execute(ctx context.Context, args json.RawMessage) (Result, er
 		return Result{}, ExecutionErrorf("path is not a regular file")
 	}
 
+	// 상한보다 한 바이트만 더 읽어 초과 여부를 판정하므로 큰 파일 전체를 메모리에 올리지 않는다.
 	content, err := io.ReadAll(io.LimitReader(file, DefaultMaxResultBytes+1))
 	if ctxErr := ctx.Err(); ctxErr != nil {
 		return Result{}, canceledExecutionError("read file", ctxErr)

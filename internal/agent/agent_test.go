@@ -238,6 +238,7 @@ func TestRunStoresUserMessageAndFinalAssistantResponse(t *testing.T) {
 	})
 }
 
+// TestRunHandlesNormalizedFinishReasons 는 명시적 complete, 빈 완료 사유, tool call 사유가 모두 정상 흐름으로 이어지는지 확인한다.
 func TestRunHandlesNormalizedFinishReasons(t *testing.T) {
 	t.Run("explicit complete", func(t *testing.T) {
 		client := &stubClient{response: llm.ChatResponse{
@@ -303,6 +304,8 @@ func TestRunHandlesNormalizedFinishReasons(t *testing.T) {
 	})
 }
 
+// TestRunRejectsIncompleteResponses 는 완료도 tool call도 아닌 사유의 응답을 tool 실행 없이 오류로 끊고,
+// 진단을 위해 assistant 응답과 tool call은 상태에 남기는지 확인한다.
 func TestRunRejectsIncompleteResponses(t *testing.T) {
 	tests := []struct {
 		name         string
@@ -1013,6 +1016,7 @@ func TestRunStoresLLMErrorWithoutAssistantMessage(t *testing.T) {
 	})
 }
 
+// TestRunStopsBeforeExceedingDefaultToolCallLimit 은 한 응답이 기본 상한보다 많은 tool을 요청해도 상한까지만 실행하고 끊는지 확인한다.
 func TestRunStopsBeforeExceedingDefaultToolCallLimit(t *testing.T) {
 	calls := make([]message.ToolCall, defaultMaxToolCalls+1)
 	for i := range calls {
@@ -1049,6 +1053,7 @@ func TestRunStopsBeforeExceedingDefaultToolCallLimit(t *testing.T) {
 	}
 }
 
+// TestRunAppliesToolCallLimitAcrossModelSteps 는 tool 호출 상한이 step마다 초기화되지 않고 실행 전체에 누적되는지 확인한다.
 func TestRunAppliesToolCallLimitAcrossModelSteps(t *testing.T) {
 	toolCall := func(id string) message.ToolCall {
 		return message.ToolCall{ID: id, Name: "lookup", Arguments: json.RawMessage(`{}`)}
@@ -1079,6 +1084,7 @@ func TestRunAppliesToolCallLimitAcrossModelSteps(t *testing.T) {
 	}
 }
 
+// TestRunLimitsToolResultBytes 는 상한과 같은 크기의 result는 그대로 전달하고, 초과한 result는 내용을 버린 오류 result로 바꾸는지 확인한다.
 func TestRunLimitsToolResultBytes(t *testing.T) {
 	limit := runtimetool.DefaultMaxResultBytes
 	tests := []struct {
@@ -1136,6 +1142,7 @@ func TestRunLimitsToolResultBytes(t *testing.T) {
 	}
 }
 
+// TestRunClassifiesCallerDeadlineAsExecutionLimit 은 호출자 deadline 초과가 provider 오류가 아니라 실행 제한으로 분류되는지 확인한다.
 func TestRunClassifiesCallerDeadlineAsExecutionLimit(t *testing.T) {
 	client := &contextStubClient{}
 	agent, err := New(Options{Client: client, MaxSteps: 1})
@@ -1158,6 +1165,8 @@ func TestRunClassifiesCallerDeadlineAsExecutionLimit(t *testing.T) {
 	}
 }
 
+// TestRunClassifiesCallerDeadlineDuringToolAsExecutionLimit 은 Tool 실행 중 호출자 deadline이 지나면
+// tool 오류 result로 넘기지 않고 실행 제한으로 끊는지 확인한다.
 func TestRunClassifiesCallerDeadlineDuringToolAsExecutionLimit(t *testing.T) {
 	call := message.ToolCall{ID: "call-1", Name: "slow", Arguments: json.RawMessage(`{}`)}
 	client := &stubClient{response: llm.ChatResponse{Message: message.Assistant("wait", call)}}
@@ -1186,6 +1195,7 @@ func TestRunClassifiesCallerDeadlineDuringToolAsExecutionLimit(t *testing.T) {
 	}
 }
 
+// TestNewValidatesTimeoutAndToolLimitBoundaries 는 0인 제한값은 기본값으로 채우고 음수는 생성 단계에서 거절하는지 확인한다.
 func TestNewValidatesTimeoutAndToolLimitBoundaries(t *testing.T) {
 	client := &stubClient{}
 	tests := []struct {

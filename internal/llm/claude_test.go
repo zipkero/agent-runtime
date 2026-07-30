@@ -138,6 +138,8 @@ func TestClaudeClientSendsMessagesHeadersAndDecodesResponse(t *testing.T) {
 	}
 }
 
+// TestClaudeFinishReasonNormalization 은 Claude stop_reason을 Runtime 공통 완료 사유로 옮기고,
+// 새로 생기거나 비어 있는 사유는 unknown으로 남겨 정상 완료로 오해하지 않는지 확인한다.
 func TestClaudeFinishReasonNormalization(t *testing.T) {
 	tests := []struct {
 		stopReason string

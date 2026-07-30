@@ -9,6 +9,7 @@ import (
 	"testing"
 )
 
+// TestFileSaveCreatesRootFile 은 루트 아래에 파일을 만들고 저장 경로, 바이트 수, 덮어쓰기 여부를 JSON 결과로 돌려주는지 확인한다.
 func TestFileSaveCreatesRootFile(t *testing.T) {
 	root := t.TempDir()
 	saveFile, err := NewFileSave(root)
@@ -38,6 +39,7 @@ func TestFileSaveCreatesRootFile(t *testing.T) {
 	}
 }
 
+// TestFileSaveCreatesParentDirectories 는 루트 안에 없는 상위 디렉터리를 만들어 저장을 이어가는지 확인한다.
 func TestFileSaveCreatesParentDirectories(t *testing.T) {
 	root := t.TempDir()
 	saveFile, err := NewFileSave(root)
@@ -54,6 +56,7 @@ func TestFileSaveCreatesParentDirectories(t *testing.T) {
 	}
 }
 
+// TestFileSaveAllowsEmptyContent 는 빈 문자열 content를 필드 누락으로 보지 않고 빈 파일로 저장하는지 확인한다.
 func TestFileSaveAllowsEmptyContent(t *testing.T) {
 	root := t.TempDir()
 	saveFile, err := NewFileSave(root)
@@ -78,6 +81,8 @@ func TestFileSaveAllowsEmptyContent(t *testing.T) {
 	}
 }
 
+// TestFileSaveOverwritesOnlyWhenAllowed 는 overwrite가 false면 기존 내용을 그대로 두고 실행 오류로 끊고,
+// true면 덮어쓴 뒤 결과에 그 사실을 남기는지 확인한다.
 func TestFileSaveOverwritesOnlyWhenAllowed(t *testing.T) {
 	root := t.TempDir()
 	path := filepath.Join(root, "note.txt")
@@ -114,6 +119,7 @@ func TestFileSaveOverwritesOnlyWhenAllowed(t *testing.T) {
 	}
 }
 
+// TestFileSaveRejectsInvalidArguments 는 JSON 오류, path·content 누락과 타입 불일치, 상위 경로 탈출, 절대 경로를 검증 단계에서 거절하는지 확인한다.
 func TestFileSaveRejectsInvalidArguments(t *testing.T) {
 	saveFile, err := NewFileSave(t.TempDir())
 	if err != nil {
@@ -146,6 +152,7 @@ func TestFileSaveRejectsInvalidArguments(t *testing.T) {
 	}
 }
 
+// TestFileSaveReturnsExecutionErrors 는 대상이 디렉터리이거나 상위 경로가 파일인 경우를 실행 오류로 구분하는지 확인한다.
 func TestFileSaveReturnsExecutionErrors(t *testing.T) {
 	root := t.TempDir()
 	if err := os.Mkdir(filepath.Join(root, "docs"), 0o755); err != nil {
@@ -181,6 +188,8 @@ func TestFileSaveReturnsExecutionErrors(t *testing.T) {
 	}
 }
 
+// TestFileSaveRejectsSymlinksOutsideRootWithoutSideEffects 는 루트 밖을 가리키는 심볼릭 링크 경로를 거절하면서
+// 루트 밖에 디렉터리를 만들거나 기존 파일을 바꾸지 않는지 확인한다.
 func TestFileSaveRejectsSymlinksOutsideRootWithoutSideEffects(t *testing.T) {
 	root := t.TempDir()
 	outside := t.TempDir()
@@ -241,6 +250,7 @@ func TestFileSaveRejectsSymlinksOutsideRootWithoutSideEffects(t *testing.T) {
 	}
 }
 
+// TestFileSaveReturnsExecutionErrorWhenContextCanceled 은 취소된 ctx에서 파일을 만들지 않고 취소 원인을 보존한 실행 오류를 반환하는지 확인한다.
 func TestFileSaveReturnsExecutionErrorWhenContextCanceled(t *testing.T) {
 	saveFile, err := NewFileSave(t.TempDir())
 	if err != nil {
@@ -255,6 +265,7 @@ func TestFileSaveReturnsExecutionErrorWhenContextCanceled(t *testing.T) {
 	}
 }
 
+// TestFileSaveRejectsInvalidRoot 는 빈 루트, 없는 경로, 디렉터리가 아닌 경로를 Tool 생성 시점에 설정 오류로 거절하는지 확인한다.
 func TestFileSaveRejectsInvalidRoot(t *testing.T) {
 	file := filepath.Join(t.TempDir(), "file.txt")
 	if err := os.WriteFile(file, []byte("content"), 0o644); err != nil {
@@ -280,6 +291,7 @@ func TestFileSaveRejectsInvalidRoot(t *testing.T) {
 	}
 }
 
+// TestFileSaveSchemaMatchesToolIdentity 는 Tool 이름과 schema의 이름·설명·InputSchema가 서로 어긋나지 않는지 확인한다.
 func TestFileSaveSchemaMatchesToolIdentity(t *testing.T) {
 	saveFile, err := NewFileSave(t.TempDir())
 	if err != nil {

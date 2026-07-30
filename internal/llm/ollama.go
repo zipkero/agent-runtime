@@ -220,6 +220,8 @@ func ollamaToolCalls(calls []message.ToolCall) []ollamaToolCall {
 	return toolCalls
 }
 
+// ollamaToolResultMessage 함수는 Tool 결과를 Ollama가 받는 형태로 옮긴다.
+// Chat API에는 tool call ID 필드가 없어 결과를 tool_name으로만 이어붙이므로 ToolCallID는 전달하지 않는다.
 func ollamaToolResultMessage(msg message.Message) ollamaRequestMessage {
 	result := msg.ToolResult
 	if result == nil {
@@ -239,6 +241,7 @@ func decodeOllamaResponse(resp ollamaChatResponse) ChatResponse {
 		if len(args) == 0 {
 			args = json.RawMessage(`{}`)
 		}
+		// Chat API 응답에는 호출 ID가 없어 ID를 비워 두고 이름만 보존한다.
 		toolCalls = append(toolCalls, message.ToolCall{
 			Name:      call.Function.Name,
 			Arguments: args,

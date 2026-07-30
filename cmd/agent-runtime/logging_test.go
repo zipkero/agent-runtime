@@ -13,6 +13,7 @@ import (
 	"github.com/zipkero/agent-runtime/internal/tool"
 )
 
+// TestParseLogLevel 은 빈 값과 공백은 기본 레벨로, 대소문자와 warning 별칭은 같은 레벨로 해석하고 알 수 없는 값은 오류로 끊는지 확인한다.
 func TestParseLogLevel(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -50,6 +51,7 @@ func TestParseLogLevel(t *testing.T) {
 	}
 }
 
+// TestParseLogLevelDefaultMatchesConfig 는 빈 값에 적용하는 기본 레벨이 config 기본값과 따로 움직이지 않는지 확인한다.
 func TestParseLogLevelDefaultMatchesConfig(t *testing.T) {
 	fromEmpty, err := parseLogLevel("")
 	if err != nil {
@@ -65,6 +67,8 @@ func TestParseLogLevelDefaultMatchesConfig(t *testing.T) {
 	}
 }
 
+// TestRunLogsStartupAndFinishToStderr 는 info 레벨에서 시작·종료 진단이 stderr로만 나가고 stdout은 결과 전용으로 남으며,
+// trace는 이 레벨에서 출력되지 않는지 확인한다.
 func TestRunLogsStartupAndFinishToStderr(t *testing.T) {
 	t.Chdir(t.TempDir())
 	stub := &runStubClient{responses: []llm.ChatResponse{
@@ -110,6 +114,7 @@ func TestRunLogsStartupAndFinishToStderr(t *testing.T) {
 	}
 }
 
+// TestRunLogsTraceAtDebugLevelWithoutSecrets 는 debug 레벨에서 실행 흐름 trace가 남고 그 출력에 API key가 섞이지 않는지 확인한다.
 func TestRunLogsTraceAtDebugLevelWithoutSecrets(t *testing.T) {
 	root := t.TempDir()
 	t.Chdir(root)
@@ -165,6 +170,7 @@ func TestRunLogsTraceAtDebugLevelWithoutSecrets(t *testing.T) {
 	}
 }
 
+// TestRunRejectsUnsupportedLogLevelBeforeProviderSetup 은 알 수 없는 LOG_LEVEL을 공급자와 Tool 준비 이전에 오류로 끊는지 확인한다.
 func TestRunRejectsUnsupportedLogLevelBeforeProviderSetup(t *testing.T) {
 	cfg := testConfig()
 	cfg.LogLevel = "verbose"

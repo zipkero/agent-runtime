@@ -10,6 +10,7 @@ import (
 	"testing"
 )
 
+// TestFileReadReadsRootFile 은 루트 아래 하위 디렉터리의 파일을 상대 경로로 읽어 내용을 그대로 돌려주는지 확인한다.
 func TestFileReadReadsRootFile(t *testing.T) {
 	root := t.TempDir()
 	path := filepath.Join(root, "nested", "note.txt")
@@ -39,6 +40,7 @@ func TestFileReadReadsRootFile(t *testing.T) {
 	}
 }
 
+// TestFileReadLimitsResultBytesWhileReading 은 상한과 같은 크기의 파일은 통과시키고 초과 파일은 읽는 중에 실행 오류로 끊는지 확인한다.
 func TestFileReadLimitsResultBytesWhileReading(t *testing.T) {
 	root := t.TempDir()
 	readFile, err := NewFileRead(root)
@@ -74,6 +76,7 @@ func TestFileReadLimitsResultBytesWhileReading(t *testing.T) {
 	}
 }
 
+// TestFileReadRejectsInvalidArguments 는 JSON 오류, 경로 누락과 타입 불일치, 상위 경로 탈출, 절대 경로를 검증 단계에서 거절하는지 확인한다.
 func TestFileReadRejectsInvalidArguments(t *testing.T) {
 	readFile, err := NewFileRead(t.TempDir())
 	if err != nil {
@@ -103,6 +106,7 @@ func TestFileReadRejectsInvalidArguments(t *testing.T) {
 	}
 }
 
+// TestFileReadReturnsExecutionErrors 는 검증은 통과하지만 읽을 수 없는 대상인 디렉터리와 없는 파일을 실행 오류로 구분하는지 확인한다.
 func TestFileReadReturnsExecutionErrors(t *testing.T) {
 	root := t.TempDir()
 	if err := os.Mkdir(filepath.Join(root, "docs"), 0o755); err != nil {
@@ -135,6 +139,8 @@ func TestFileReadReturnsExecutionErrors(t *testing.T) {
 	}
 }
 
+// TestFileReadRejectsSymlinksOutsideRoot 는 경로 문자열로는 루트 안이지만 실제로 루트 밖을 가리키는 심볼릭 링크를
+// 중간 경로와 마지막 경로 어디에 있어도 거절하는지 확인한다.
 func TestFileReadRejectsSymlinksOutsideRoot(t *testing.T) {
 	root := t.TempDir()
 	outside := t.TempDir()
@@ -189,6 +195,7 @@ func TestFileReadRejectsSymlinksOutsideRoot(t *testing.T) {
 	})
 }
 
+// TestFileReadReturnsExecutionErrorWhenContextCanceled 은 취소된 ctx에서 파일을 열지 않고 취소 원인을 보존한 실행 오류를 반환하는지 확인한다.
 func TestFileReadReturnsExecutionErrorWhenContextCanceled(t *testing.T) {
 	readFile, err := NewFileRead(t.TempDir())
 	if err != nil {
@@ -203,6 +210,7 @@ func TestFileReadReturnsExecutionErrorWhenContextCanceled(t *testing.T) {
 	}
 }
 
+// TestFileReadRejectsInvalidRoot 는 빈 루트, 없는 경로, 디렉터리가 아닌 경로를 Tool 생성 시점에 설정 오류로 거절하는지 확인한다.
 func TestFileReadRejectsInvalidRoot(t *testing.T) {
 	file := filepath.Join(t.TempDir(), "file.txt")
 	if err := os.WriteFile(file, []byte("content"), 0o644); err != nil {
@@ -228,6 +236,7 @@ func TestFileReadRejectsInvalidRoot(t *testing.T) {
 	}
 }
 
+// TestFileReadSchemaMatchesToolIdentity 는 Tool 이름과 schema의 이름·설명·InputSchema가 서로 어긋나지 않는지 확인한다.
 func TestFileReadSchemaMatchesToolIdentity(t *testing.T) {
 	readFile, err := NewFileRead(t.TempDir())
 	if err != nil {

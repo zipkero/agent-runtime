@@ -111,6 +111,7 @@ func (w WebSearch) Execute(ctx context.Context, args json.RawMessage) (Result, e
 	return Result{Content: string(encoded)}, nil
 }
 
+// webSearchArguments 구조체는 max_results를 포인터로 받아 미지정은 기본값으로 채우고 0 이하만 거부한다.
 type webSearchArguments struct {
 	Query       string `json:"query"`
 	MaxResults  *int   `json:"max_results"`
@@ -255,6 +256,7 @@ func (c tavilyHTTPClient) Search(ctx context.Context, apiKey string, request tav
 	}
 	defer httpResponse.Body.Close()
 
+	// 상한보다 한 바이트만 더 읽어 초과 여부를 판정하므로 큰 응답 전체를 메모리에 올리지 않는다.
 	responseBody, err := io.ReadAll(io.LimitReader(httpResponse.Body, DefaultMaxResultBytes+1))
 	if err != nil {
 		return tavilySearchResponse{}, fmt.Errorf("read response: %w", err)

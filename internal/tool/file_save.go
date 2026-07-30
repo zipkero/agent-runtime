@@ -134,6 +134,7 @@ func (f FileSave) Execute(ctx context.Context, args json.RawMessage) (Result, er
 	return Result{Content: string(encoded)}, nil
 }
 
+// fileSaveArguments 구조체는 content를 포인터로 받아 빈 문자열 저장은 허용하고 필드 누락만 거부한다.
 type fileSaveArguments struct {
 	Path      string  `json:"path"`
 	Content   *string `json:"content"`

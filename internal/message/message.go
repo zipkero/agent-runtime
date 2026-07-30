@@ -7,10 +7,14 @@ import "encoding/json"
 type Role string
 
 const (
-	RoleSystem    Role = "system"
-	RoleUser      Role = "user"
+	// RoleSystem 상수는 공급자 요청의 시스템 지시문에 해당하는 역할이다.
+	RoleSystem Role = "system"
+	// RoleUser 상수는 호출자가 넣은 입력에 해당하는 역할이다.
+	RoleUser Role = "user"
+	// RoleAssistant 상수는 텍스트와 Tool 호출 요청을 담는 모델 응답 역할이다.
 	RoleAssistant Role = "assistant"
-	RoleTool      Role = "tool"
+	// RoleTool 상수는 Runtime이 실행한 Tool 결과를 담는 역할이며 내용은 ToolResult에 있다.
+	RoleTool Role = "tool"
 )
 
 // ToolCall 구조체는 공급자 응답의 Tool 호출 요청을 Runtime 내부 표현으로 보존한다.

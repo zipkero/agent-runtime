@@ -24,11 +24,16 @@ type ChatRequest struct {
 type FinishReason string
 
 const (
-	FinishReasonComplete    FinishReason = "complete"
-	FinishReasonToolCall    FinishReason = "tool_call"
+	// FinishReasonComplete 상수는 공급자가 응답을 끝까지 생성해 정상 완료했음을 나타낸다.
+	FinishReasonComplete FinishReason = "complete"
+	// FinishReasonToolCall 상수는 공급자가 Tool 실행 결과를 기다리며 응답을 끝냈음을 나타낸다.
+	FinishReasonToolCall FinishReason = "tool_call"
+	// FinishReasonLengthLimit 상수는 출력 토큰 상한에 걸려 응답이 잘렸음을 나타낸다.
 	FinishReasonLengthLimit FinishReason = "length_limit"
-	FinishReasonBlocked     FinishReason = "blocked"
-	FinishReasonUnknown     FinishReason = "unknown"
+	// FinishReasonBlocked 상수는 공급자가 안전 정책 등으로 응답 생성을 거부했음을 나타낸다.
+	FinishReasonBlocked FinishReason = "blocked"
+	// FinishReasonUnknown 상수는 공급자 원문을 위 값으로 정규화할 수 없었음을 나타내며 StopReason에 원문이 남는다.
+	FinishReasonUnknown FinishReason = "unknown"
 )
 
 // ChatResponse 구조체는 공급자 응답을 Runtime 내부 메시지 형태로 정규화한 결과다.

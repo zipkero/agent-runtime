@@ -130,6 +130,7 @@ func TestRegistryLookupUnknownDistinguishesMissingTool(t *testing.T) {
 	}
 }
 
+// TestRegistryLen 은 nil registry와 빈 registry에서도 Len이 panic 없이 0을 반환하는지 확인한다.
 func TestRegistryLen(t *testing.T) {
 	var nilRegistry *Registry
 	if got := nilRegistry.Len(); got != 0 {

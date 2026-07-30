@@ -16,31 +16,51 @@ import (
 type Status string
 
 const (
-	StatusRunning     Status = "running"
-	StatusFinal       Status = "final"
+	// StatusRunning 상수는 종료 조건에 도달하지 않고 반복이 진행 중임을 나타낸다.
+	StatusRunning Status = "running"
+	// StatusFinal 상수는 Tool 호출이 없는 assistant 응답을 최종 답으로 받아 종료했음을 나타낸다.
+	StatusFinal Status = "final"
+	// StatusNeedsAction 상수는 assistant가 Tool을 요청했지만 실행할 Tool이 등록되지 않아 호출자에게 넘긴 상태다.
 	StatusNeedsAction Status = "needs_action"
-	StatusMaxSteps    Status = "max_steps"
-	StatusError       Status = "error"
+	// StatusMaxSteps 상수는 MaxSteps에 도달해 다음 LLM 요청 없이 종료했음을 나타낸다.
+	StatusMaxSteps Status = "max_steps"
+	// StatusError 상수는 LLM, middleware, 실행 제한 실패로 종료했음을 나타내며 원인은 LastError에 남는다.
+	StatusError Status = "error"
 )
 
 // TraceAction 타입은 Agent 실행 중 관찰 가능한 주요 상태 전이를 표현한다.
 type TraceAction string
 
 const (
-	TraceActionUserMessage           TraceAction = "user_message"
-	TraceActionLLMRequest            TraceAction = "llm_request"
-	TraceActionLLMResponse           TraceAction = "llm_response"
-	TraceActionFinal                 TraceAction = "final"
-	TraceActionNeedsAction           TraceAction = "needs_action"
-	TraceActionMaxSteps              TraceAction = "max_steps"
-	TraceActionLLMError              TraceAction = "llm_error"
-	TraceActionMiddlewareError       TraceAction = "middleware_error"
-	TraceActionToolCall              TraceAction = "tool_call"
-	TraceActionToolResult            TraceAction = "tool_result"
-	TraceActionToolError             TraceAction = "tool_error"
-	TraceActionToolTimeout           TraceAction = "tool_timeout"
-	TraceActionExecutionLimit        TraceAction = "execution_limit"
-	TraceActionIncompleteResponse    TraceAction = "incomplete_response"
+	// TraceActionUserMessage 상수는 입력을 사용자 메시지로 누적한 시점을 표시한다.
+	TraceActionUserMessage TraceAction = "user_message"
+	// TraceActionLLMRequest 상수는 pre-model middleware까지 적용한 요청을 공급자에 보내기 직전을 표시한다.
+	TraceActionLLMRequest TraceAction = "llm_request"
+	// TraceActionLLMResponse 상수는 post-model middleware까지 적용한 응답을 메시지에 누적한 시점을 표시한다.
+	TraceActionLLMResponse TraceAction = "llm_response"
+	// TraceActionFinal 상수는 Tool 호출이 없는 응답을 최종 답으로 확정한 종료를 표시한다.
+	TraceActionFinal TraceAction = "final"
+	// TraceActionNeedsAction 상수는 Tool 요청을 실행하지 못해 호출자에게 넘긴 종료를 표시한다.
+	TraceActionNeedsAction TraceAction = "needs_action"
+	// TraceActionMaxSteps 상수는 step 제한으로 다음 LLM 요청 없이 끝낸 종료를 표시한다.
+	TraceActionMaxSteps TraceAction = "max_steps"
+	// TraceActionLLMError 상수는 공급자 호출 실패로 끝낸 종료를 표시한다.
+	TraceActionLLMError TraceAction = "llm_error"
+	// TraceActionMiddlewareError 상수는 pre-model 또는 post-model middleware 실패로 끝낸 종료를 표시한다.
+	TraceActionMiddlewareError TraceAction = "middleware_error"
+	// TraceActionToolCall 상수는 한 Tool 호출의 실행 시작을 표시한다.
+	TraceActionToolCall TraceAction = "tool_call"
+	// TraceActionToolResult 상수는 Tool이 제한 안의 결과를 반환했음을 표시한다.
+	TraceActionToolResult TraceAction = "tool_result"
+	// TraceActionToolError 상수는 Tool 조회·검증·실행 실패나 result 크기 초과를 오류 result로 전달했음을 표시한다.
+	TraceActionToolError TraceAction = "tool_error"
+	// TraceActionToolTimeout 상수는 Tool 실행이 ToolTimeout을 넘겨 오류 result로 전달됐음을 표시한다.
+	TraceActionToolTimeout TraceAction = "tool_timeout"
+	// TraceActionExecutionLimit 상수는 Tool 호출 수, result 크기, 실행 deadline 제한으로 끝낸 종료를 표시한다.
+	TraceActionExecutionLimit TraceAction = "execution_limit"
+	// TraceActionIncompleteResponse 상수는 완료 사유가 정상 완료도 Tool 호출도 아니어서 끝낸 종료를 표시한다.
+	TraceActionIncompleteResponse TraceAction = "incomplete_response"
+	// TraceActionStructuredOutputError 상수는 최종 답이 지정된 schema를 만족하지 못해 끝낸 종료를 표시한다.
 	TraceActionStructuredOutputError TraceAction = "structured_output_error"
 )
 
@@ -337,6 +357,7 @@ func (a *Agent) executeToolCall(ctx context.Context, state *AgentState, call mes
 		}
 		return a.toolErrorResult(state, call, action, err), nil
 	}
+	// Tool이 ctx 취소를 삼키고 오류 없이 반환하는 경우에도 제한 초과를 오류 result로 남긴다.
 	if err := toolCtx.Err(); err != nil {
 		action := TraceActionToolError
 		if errors.Is(err, context.DeadlineExceeded) {

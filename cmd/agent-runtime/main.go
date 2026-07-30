@@ -27,10 +27,13 @@ func main() {
 	os.Exit(run(os.Args[1:], os.Stdin, os.Stdout, os.Stderr, config.Load, newConfiguredClient, newConfiguredTools))
 }
 
+// 설정 로딩, 공급자 연결, Tool 등록은 함수 타입으로 분리해 run이 실제 외부 의존성 없이도 검증되게 한다.
 type configLoader func() (config.Config, error)
 type clientBuilder func(config.Config) (llm.LLMClient, error)
 type toolBuilder func(config.Config, string) (*tool.Registry, error)
 
+// run 함수는 CLI 한 번의 실행을 수행하고 프로세스 종료 코드를 반환한다.
+// 실행 결과만 stdout에 쓰고 진단과 오류는 stderr로 보내며, 종료 상태가 final이 아니면 1을 반환한다.
 func run(
 	args []string,
 	stdin io.Reader,

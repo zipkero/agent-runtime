@@ -11,6 +11,7 @@ import (
 	"time"
 )
 
+// TestCodeExecutionRunsGoCommand 은 허용된 go 명령을 루트에서 실행하고 출력과 종료 코드를 JSON 결과로 정규화하는지 확인한다.
 func TestCodeExecutionRunsGoCommand(t *testing.T) {
 	root := newGoModule(t, map[string]string{
 		"main.go": `package main
@@ -46,6 +47,8 @@ func main() {
 	}
 }
 
+// TestCodeExecutionEnvironmentUsesAllowlist 는 자식 프로세스 환경이 허용 목록과 강제 값만 담고,
+// 부모의 API key처럼 허용되지 않은 환경변수는 빠지는지 확인한다.
 func TestCodeExecutionEnvironmentUsesAllowlist(t *testing.T) {
 	goTempDir := filepath.Join(t.TempDir(), "go-work")
 	for _, key := range codeExecutionEnvironmentAllowlist {
@@ -87,6 +90,8 @@ func TestCodeExecutionEnvironmentUsesAllowlist(t *testing.T) {
 	}
 }
 
+// TestCodeExecutionUsesRootTempAndHidesSecrets 는 실제 자식 프로세스에서 실행별 임시 경로와 workspace 비활성화가 적용되고,
+// 비밀은 보이지 않으며 임시 경로가 실행 뒤 정리되는지 확인한다.
 func TestCodeExecutionUsesRootTempAndHidesSecrets(t *testing.T) {
 	root := newGoModule(t, map[string]string{
 		"main.go": `package main
@@ -158,6 +163,7 @@ func main() {
 	}
 }
 
+// TestCodeExecutionPassesStdin 은 stdin 인수를 자식 프로세스의 표준 입력으로 전달하는지 확인한다.
 func TestCodeExecutionPassesStdin(t *testing.T) {
 	root := newGoModule(t, map[string]string{
 		"main.go": `package main
@@ -193,6 +199,8 @@ func main() {
 	}
 }
 
+// TestCodeExecutionReturnsExecutionErrorWithOutput 은 명령이 실패해도 출력과 종료 코드를 result와 오류 양쪽에 남겨
+// LLM이 원인을 볼 수 있게 하는지 확인한다.
 func TestCodeExecutionReturnsExecutionErrorWithOutput(t *testing.T) {
 	root := newGoModule(t, map[string]string{
 		"main_test.go": `package main
@@ -234,6 +242,7 @@ func TestFailure(t *testing.T) {
 	}
 }
 
+// TestCodeExecutionReturnsExecutionErrorOnTimeout 은 deadline 초과를 일반 실패와 구분해 timed_out 표시가 담긴 실행 오류로 돌려주는지 확인한다.
 func TestCodeExecutionReturnsExecutionErrorOnTimeout(t *testing.T) {
 	root := newGoModule(t, map[string]string{
 		"main_test.go": `package main
@@ -269,6 +278,8 @@ func TestSleep(t *testing.T) {
 	}
 }
 
+// TestCodeExecutionReturnsExecutionErrorWhenContextCanceled 은 취소된 ctx에서 프로세스를 띄우지 않고,
+// timeout이 아닌 취소 결과로 구분해 돌려주는지 확인한다.
 func TestCodeExecutionReturnsExecutionErrorWhenContextCanceled(t *testing.T) {
 	codeExecution, err := NewCodeExecution(newGoModule(t, nil))
 	if err != nil {
@@ -291,6 +302,8 @@ func TestCodeExecutionReturnsExecutionErrorWhenContextCanceled(t *testing.T) {
 	}
 }
 
+// TestCodeExecutionRejectsInvalidArguments 는 허용되지 않은 subcommand, 작업 디렉터리 변경, 루트 밖 경로, go env 영구 변경,
+// schema에 없는 필드를 실행 전 검증에서 거절하는지 확인한다.
 func TestCodeExecutionRejectsInvalidArguments(t *testing.T) {
 	codeExecution, err := NewCodeExecution(newGoModule(t, nil))
 	if err != nil {
@@ -327,6 +340,7 @@ func TestCodeExecutionRejectsInvalidArguments(t *testing.T) {
 	}
 }
 
+// TestCodeExecutionLimitsOutput 은 상한을 넘는 출력을 보관 크기만큼 자르고 잘렸다는 표시를 남기되 실행 자체는 실패로 만들지 않는지 확인한다.
 func TestCodeExecutionLimitsOutput(t *testing.T) {
 	root := newGoModule(t, map[string]string{
 		"main.go": `package main
@@ -357,6 +371,7 @@ func main() {
 	}
 }
 
+// TestCodeExecutionRejectsInvalidRoot 는 빈 루트, 없는 경로, 디렉터리가 아닌 경로를 Tool 생성 시점에 설정 오류로 거절하는지 확인한다.
 func TestCodeExecutionRejectsInvalidRoot(t *testing.T) {
 	file := filepath.Join(t.TempDir(), "file.txt")
 	if err := os.WriteFile(file, []byte("content"), 0o644); err != nil {
@@ -382,6 +397,7 @@ func TestCodeExecutionRejectsInvalidRoot(t *testing.T) {
 	}
 }
 
+// TestCodeExecutionSchemaMatchesToolIdentity 는 Tool 이름과 schema의 이름·설명·InputSchema가 서로 어긋나지 않는지 확인한다.
 func TestCodeExecutionSchemaMatchesToolIdentity(t *testing.T) {
 	codeExecution, err := NewCodeExecution(newGoModule(t, nil))
 	if err != nil {

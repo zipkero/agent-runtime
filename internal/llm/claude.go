@@ -15,9 +15,10 @@ import (
 )
 
 const (
-	claudeDefaultEndpoint   = "https://api.anthropic.com"
-	claudeMessagesPath      = "/v1/messages"
-	claudeAPIVersion        = "2023-06-01"
+	claudeDefaultEndpoint = "https://api.anthropic.com"
+	claudeMessagesPath    = "/v1/messages"
+	claudeAPIVersion      = "2023-06-01"
+	// Messages API는 max_tokens를 필수로 요구하므로 호출자가 지정하지 않아도 이 값을 채워 보낸다.
 	claudeDefaultMaxTokens  = 1024
 	claudeRequestMediaType  = "application/json"
 	claudeProviderOperation = "chat"
@@ -182,6 +183,7 @@ func (c *claudeClient) buildRequest(req ChatRequest) (claudeMessageRequest, erro
 				Content: claudeContentBlocks(msg),
 			})
 		case message.RoleTool:
+			// Messages API에는 tool 역할이 없고 tool_result block을 user 메시지로 받는다.
 			messages = append(messages, claudeRequestMessage{
 				Role:    string(message.RoleUser),
 				Content: claudeContentBlocks(msg),

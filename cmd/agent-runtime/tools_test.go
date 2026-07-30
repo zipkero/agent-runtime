@@ -7,6 +7,8 @@ import (
 	"github.com/zipkero/agent-runtime/internal/config"
 )
 
+// TestNewConfiguredToolsRegistersCodeExecutionOnlyWhenEnabled 은 기본 Tool 묶음과 등록 순서를 고정하고,
+// code execution은 설정이 켜졌을 때만 추가되는지 확인한다.
 func TestNewConfiguredToolsRegistersCodeExecutionOnlyWhenEnabled(t *testing.T) {
 	tests := []struct {
 		name                string

@@ -8,6 +8,7 @@ import (
 	"time"
 )
 
+// TestLoadFileUsesDefaultsWithoutEnvFile 은 .env가 없어도 오류 없이 기본값만으로 설정을 만드는지 확인한다.
 func TestLoadFileUsesDefaultsWithoutEnvFile(t *testing.T) {
 	clearConfigEnv(t)
 
@@ -33,6 +34,7 @@ func TestLoadFileUsesDefaultsWithoutEnvFile(t *testing.T) {
 	}
 }
 
+// TestLoadFileReadsDotEnv 는 주석과 빈 줄이 섞인 .env에서 모든 설정 키를 읽어 값으로 옮기는지 확인한다.
 func TestLoadFileReadsDotEnv(t *testing.T) {
 	clearConfigEnv(t)
 	path := writeEnvFile(t, `
@@ -78,6 +80,7 @@ LOG_LEVEL=debug
 	}
 }
 
+// TestLoadFilePrefersProcessEnvOverDotEnv 는 같은 키에서 실제 환경변수가 파일 값을 덮어쓰고, 파일에만 있는 키는 남는지 확인한다.
 func TestLoadFilePrefersProcessEnvOverDotEnv(t *testing.T) {
 	clearConfigEnv(t)
 	t.Setenv(envLLMProvider, "ollama")
@@ -115,6 +118,7 @@ ENABLE_CODE_EXECUTION=false
 	}
 }
 
+// TestLoadFileParsesEnableCodeExecution 은 대소문자가 다른 bool 값을 받아들이고, 해석할 수 없는 값은 해당 키를 밝힌 오류로 끊는지 확인한다.
 func TestLoadFileParsesEnableCodeExecution(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -150,6 +154,7 @@ func TestLoadFileParsesEnableCodeExecution(t *testing.T) {
 	}
 }
 
+// TestLoadFileRejectsInvalidDuration 은 해석할 수 없는 timeout 값을 기본값으로 넘기지 않고 키 이름이 담긴 오류로 알리는지 확인한다.
 func TestLoadFileRejectsInvalidDuration(t *testing.T) {
 	clearConfigEnv(t)
 	path := writeEnvFile(t, "LLM_TIMEOUT=soon\n")
@@ -163,6 +168,7 @@ func TestLoadFileRejectsInvalidDuration(t *testing.T) {
 	}
 }
 
+// TestLoadFileValidatesPositiveLLMTimeout 은 0과 음수 timeout을 .env와 실제 환경변수 어느 쪽에서 와도 거절하는지 확인한다.
 func TestLoadFileValidatesPositiveLLMTimeout(t *testing.T) {
 	tests := []struct {
 		name      string

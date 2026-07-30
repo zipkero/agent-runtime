@@ -166,6 +166,7 @@ func codeExecutionEnvironment(goTempDir string) []string {
 	hasGoCache := false
 	for _, key := range codeExecutionEnvironmentAllowlist {
 		if value, ok := os.LookupEnv(key); ok {
+			// 빈 GOCACHE를 그대로 넘기면 go 명령이 실패하므로 아래에서 실행별 임시 캐시로 대체한다.
 			if key == "GOCACHE" && strings.TrimSpace(value) == "" {
 				continue
 			}

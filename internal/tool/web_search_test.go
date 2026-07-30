@@ -10,6 +10,7 @@ import (
 	"testing"
 )
 
+// TestWebSearchExecutesSearch 는 지정한 인수와 기본값을 Tavily 요청으로 옮기고, 응답을 답변·출처만 담은 JSON 결과로 정규화하는지 확인한다.
 func TestWebSearchExecutesSearch(t *testing.T) {
 	client := &fakeTavilySearchClient{
 		response: tavilySearchResponse{
@@ -71,6 +72,8 @@ func TestWebSearchExecutesSearch(t *testing.T) {
 	}
 }
 
+// TestWebSearchRejectsInvalidArguments 는 JSON 오류, query 누락·공백·길이 초과, max_results의 0과 타입 불일치,
+// 지원하지 않는 search_depth와 topic을 검증 단계에서 거절하는지 확인한다.
 func TestWebSearchRejectsInvalidArguments(t *testing.T) {
 	webSearch := newWebSearch("tvly-test", &fakeTavilySearchClient{})
 	longQuery := strings.Repeat("가", maxWebSearchQueryLength+1)
@@ -98,6 +101,7 @@ func TestWebSearchRejectsInvalidArguments(t *testing.T) {
 	}
 }
 
+// TestWebSearchReturnsConfigurationErrorForMissingAPIKey 는 API key가 없으면 검색을 보내기 전에 설정 오류로 끊는지 확인한다.
 func TestWebSearchReturnsConfigurationErrorForMissingAPIKey(t *testing.T) {
 	webSearch := newWebSearch(" ", &fakeTavilySearchClient{})
 
@@ -107,6 +111,7 @@ func TestWebSearchReturnsConfigurationErrorForMissingAPIKey(t *testing.T) {
 	}
 }
 
+// TestWebSearchReturnsExecutionErrorForProviderFailure 는 검색 공급자 실패를 설정 오류가 아니라 실행 오류로 분류하는지 확인한다.
 func TestWebSearchReturnsExecutionErrorForProviderFailure(t *testing.T) {
 	webSearch := newWebSearch("tvly-test", &fakeTavilySearchClient{
 		err: errors.New("provider unavailable"),
@@ -118,6 +123,7 @@ func TestWebSearchReturnsExecutionErrorForProviderFailure(t *testing.T) {
 	}
 }
 
+// TestWebSearchReturnsExecutionErrorWhenContextCanceled 은 취소된 ctx에서 검색 요청을 보내지 않고 취소 원인을 보존한 실행 오류를 반환하는지 확인한다.
 func TestWebSearchReturnsExecutionErrorWhenContextCanceled(t *testing.T) {
 	client := &fakeTavilySearchClient{}
 	webSearch := newWebSearch("tvly-test", client)
@@ -133,6 +139,7 @@ func TestWebSearchReturnsExecutionErrorWhenContextCanceled(t *testing.T) {
 	}
 }
 
+// TestWebSearchSchemaMatchesToolIdentity 는 Tool 이름과 schema의 이름·설명·InputSchema가 서로 어긋나지 않는지 확인한다.
 func TestWebSearchSchemaMatchesToolIdentity(t *testing.T) {
 	webSearch := NewWebSearch("tvly-test")
 	schema := webSearch.Schema()
@@ -151,6 +158,7 @@ func TestWebSearchSchemaMatchesToolIdentity(t *testing.T) {
 	}
 }
 
+// TestTavilyHTTPClientSendsSearchRequest 는 검색 요청을 bearer 인증이 붙은 JSON POST로 보내고 응답을 내부 표현으로 옮기는지 확인한다.
 func TestTavilyHTTPClientSendsSearchRequest(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -196,6 +204,7 @@ func TestTavilyHTTPClientSendsSearchRequest(t *testing.T) {
 	}
 }
 
+// TestTavilyHTTPClientReturnsProviderError 는 실패 응답에서 공급자가 준 오류 설명을 버리지 않고 오류 메시지에 남기는지 확인한다.
 func TestTavilyHTTPClientReturnsProviderError(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)
@@ -210,6 +219,7 @@ func TestTavilyHTTPClientReturnsProviderError(t *testing.T) {
 	}
 }
 
+// TestTavilyHTTPClientRejectsMalformedResponse 는 깨진 JSON 응답을 빈 결과로 넘기지 않고 해석 실패로 알리는지 확인한다.
 func TestTavilyHTTPClientRejectsMalformedResponse(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -224,6 +234,7 @@ func TestTavilyHTTPClientRejectsMalformedResponse(t *testing.T) {
 	}
 }
 
+// TestTavilyHTTPClientLimitsResponseBytesWhileReading 은 상한과 같은 크기의 응답은 통과시키고 초과 응답은 읽는 중에 오류로 끊는지 확인한다.
 func TestTavilyHTTPClientLimitsResponseBytesWhileReading(t *testing.T) {
 	prefix := `{"query":"go","answer":"`
 	suffix := `","results":[]}`

@@ -12,6 +12,8 @@ import (
 	runtimetool "github.com/zipkero/agent-runtime/internal/tool"
 )
 
+// TestRunnerExecutesToolLoopAndReturnsFinalState 는 Runner가 tool result를 다음 요청에 실어 최종 답까지 이어가고,
+// schema가 없으면 StructuredOutput을 비워 두는지 확인한다.
 func TestRunnerExecutesToolLoopAndReturnsFinalState(t *testing.T) {
 	toolCall := message.ToolCall{
 		ID:        "call-1",
@@ -80,6 +82,7 @@ func TestRunnerExecutesToolLoopAndReturnsFinalState(t *testing.T) {
 	}
 }
 
+// TestRunnerAppliesIndependentTimeoutToEveryModelCall 은 ModelTimeout이 실행 전체 예산이 아니라 호출마다 새로 주어지는지 확인한다.
 func TestRunnerAppliesIndependentTimeoutToEveryModelCall(t *testing.T) {
 	client := &deadlineStubClient{
 		responses: []llm.ChatResponse{
@@ -123,6 +126,7 @@ func TestRunnerAppliesIndependentTimeoutToEveryModelCall(t *testing.T) {
 	}
 }
 
+// TestRunnerPreservesMaxStepsAndLLMErrorStates 는 max step 종료와 provider 오류 상태를 Runner가 가공하지 않고 그대로 전달하는지 확인한다.
 func TestRunnerPreservesMaxStepsAndLLMErrorStates(t *testing.T) {
 	t.Run("max steps", func(t *testing.T) {
 		client := &stubClient{response: llm.ChatResponse{Message: message.Assistant("answer")}}
@@ -154,6 +158,7 @@ func TestRunnerPreservesMaxStepsAndLLMErrorStates(t *testing.T) {
 	})
 }
 
+// TestRunnerPreservesCallerCancellation 은 호출자 취소가 ModelTimeout에 가려지지 않고 취소 원인으로 상태에 남는지 확인한다.
 func TestRunnerPreservesCallerCancellation(t *testing.T) {
 	client := &contextStubClient{}
 	runner, err := NewRunner(RunnerOptions{
@@ -177,6 +182,7 @@ func TestRunnerPreservesCallerCancellation(t *testing.T) {
 	}
 }
 
+// TestNewRunnerRequiresClient 는 client 없는 Runner 생성을 ModelTimeout 지정 여부와 무관하게 거절하는지 확인한다.
 func TestNewRunnerRequiresClient(t *testing.T) {
 	tests := []struct {
 		name         string
@@ -195,6 +201,7 @@ func TestNewRunnerRequiresClient(t *testing.T) {
 	}
 }
 
+// TestNewRunnerValidatesTimeoutAndToolLimitBoundaries 는 0인 제한값은 기본값으로 채우고 음수는 생성 단계에서 거절하는지 확인한다.
 func TestNewRunnerValidatesTimeoutAndToolLimitBoundaries(t *testing.T) {
 	client := &stubClient{}
 	tests := []struct {

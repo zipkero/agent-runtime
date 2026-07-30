@@ -13,6 +13,8 @@ import (
 	runtimetool "github.com/zipkero/agent-runtime/internal/tool"
 )
 
+// TestRunnerAppliesMiddlewareInRegistrationOrderOnEveryModelCall 은 pre/post hook이 매 모델 호출마다 등록 순서대로 실행되고,
+// 앞 hook의 변경이 다음 hook과 실제 provider 요청에까지 이어지는지 확인한다.
 func TestRunnerAppliesMiddlewareInRegistrationOrderOnEveryModelCall(t *testing.T) {
 	client := &stubClient{responses: []llm.ChatResponse{
 		{Message: message.Assistant("lookup pending", message.ToolCall{
@@ -115,6 +117,7 @@ func TestRunnerAppliesMiddlewareInRegistrationOrderOnEveryModelCall(t *testing.T
 	}
 }
 
+// TestRunnerAppliesModelTimeoutOnlyToProviderCall 은 ModelTimeout이 provider 호출 context에만 붙고 middleware 실행에는 걸리지 않는지 확인한다.
 func TestRunnerAppliesModelTimeoutOnlyToProviderCall(t *testing.T) {
 	client := &deadlineStubClient{responses: []llm.ChatResponse{{Message: message.Assistant("answer")}}}
 	middleware := ModelMiddleware{
@@ -152,6 +155,8 @@ func TestRunnerAppliesModelTimeoutOnlyToProviderCall(t *testing.T) {
 	}
 }
 
+// TestPreModelChangesDoNotAliasAgentOrRegistryState 는 pre-model hook이 받은 요청을 직접 수정해도
+// Agent 대화 상태와 registry schema가 오염되지 않는지 확인한다.
 func TestPreModelChangesDoNotAliasAgentOrRegistryState(t *testing.T) {
 	originalArguments := json.RawMessage(`{"query":"runtime"}`)
 	client := &stubClient{responses: []llm.ChatResponse{
@@ -224,6 +229,8 @@ func TestPreModelChangesDoNotAliasAgentOrRegistryState(t *testing.T) {
 	}
 }
 
+// TestRunnerStopsAtMiddlewareError 는 middleware 실패가 실패한 단계와 이름을 보존한 오류로 끊기고,
+// 뒤 middleware와 tool을 실행하지 않으며 응답도 누적하지 않는지 확인한다.
 func TestRunnerStopsAtMiddlewareError(t *testing.T) {
 	tests := []struct {
 		name            string
@@ -340,6 +347,7 @@ func TestRunnerStopsAtMiddlewareError(t *testing.T) {
 	}
 }
 
+// TestNewRunnerValidatesMiddleware 는 이름 누락·공백·중복과 hook 없는 middleware를 실행 전에 거절하는지 확인한다.
 func TestNewRunnerValidatesMiddleware(t *testing.T) {
 	preModel := func(_ context.Context, req llm.ChatRequest) (llm.ChatRequest, error) {
 		return req, nil

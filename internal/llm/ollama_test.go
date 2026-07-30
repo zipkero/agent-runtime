@@ -143,6 +143,8 @@ func TestOllamaClientSendsChatRequestAndDecodesResponse(t *testing.T) {
 	}
 }
 
+// TestOllamaFinishReasonNormalization 은 done_reason과 tool call 유무 조합을 공통 완료 사유로 옮기고,
+// 잘린 응답은 tool call이 있어도 length limit으로 분류하는지 확인한다.
 func TestOllamaFinishReasonNormalization(t *testing.T) {
 	tests := []struct {
 		name         string

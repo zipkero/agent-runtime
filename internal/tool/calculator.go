@@ -67,6 +67,7 @@ func (Calculator) Execute(ctx context.Context, args json.RawMessage) (Result, er
 	return Result{Content: strconv.FormatFloat(value, 'f', -1, 64)}, nil
 }
 
+// calculatorArguments 구조체는 피연산자를 포인터로 받아 값 0과 필드 누락을 구분한다.
 type calculatorArguments struct {
 	Left     *float64 `json:"left"`
 	Operator string   `json:"operator"`

@@ -11,6 +11,8 @@ import (
 	"github.com/zipkero/agent-runtime/internal/message"
 )
 
+// TestRunnerValidatesStructuredOutput 은 schema를 만족한 최종 답에서 앞뒤 공백만 제거한 원문을 StructuredOutput으로 돌려주고,
+// FinalAnswer는 모델이 준 그대로 남기는지 확인한다.
 func TestRunnerValidatesStructuredOutput(t *testing.T) {
 	schema := json.RawMessage(`{
 		"$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -49,6 +51,8 @@ func TestRunnerValidatesStructuredOutput(t *testing.T) {
 	}
 }
 
+// TestRunnerRejectsInvalidStructuredOutput 은 JSON 해석 실패와 schema 불일치를 실패한 단계까지 구분해 오류로 끊고,
+// 원본 응답은 진단을 위해 남기는지 확인한다.
 func TestRunnerRejectsInvalidStructuredOutput(t *testing.T) {
 	schema := json.RawMessage(`{
 		"type": "object",
@@ -103,6 +107,7 @@ func TestRunnerRejectsInvalidStructuredOutput(t *testing.T) {
 	}
 }
 
+// TestNewRunnerCompilesSelfContainedOutputSchema 는 빈 schema, 잘못된 schema, 외부 참조 schema를 provider 호출 전에 거절하는지 확인한다.
 func TestNewRunnerCompilesSelfContainedOutputSchema(t *testing.T) {
 	tests := []struct {
 		name          string

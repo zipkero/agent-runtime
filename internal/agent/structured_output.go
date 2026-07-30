@@ -49,6 +49,7 @@ func (v *structuredOutputValidator) Validate(text string) (json.RawMessage, erro
 
 func decodeJSONDocument(raw []byte) (any, error) {
 	decoder := json.NewDecoder(bytes.NewReader(raw))
+	// float64 변환으로 큰 정수의 정밀도가 깨지면 schema의 정수 제약 판정이 달라지므로 원문 숫자를 유지한다.
 	decoder.UseNumber()
 
 	var document any

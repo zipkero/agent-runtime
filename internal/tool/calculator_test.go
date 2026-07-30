@@ -7,6 +7,7 @@ import (
 	"testing"
 )
 
+// TestCalculatorExecutesArithmetic 은 네 연산자의 계산 결과를 불필요한 소수점 없이 문자열 result로 정규화하는지 확인한다.
 func TestCalculatorExecutesArithmetic(t *testing.T) {
 	calculator := NewCalculator()
 	tests := []struct {
@@ -37,6 +38,7 @@ func TestCalculatorExecutesArithmetic(t *testing.T) {
 	}
 }
 
+// TestCalculatorRejectsInvalidArguments 는 JSON 오류, 피연산자 누락, 타입 불일치, 지원하지 않는 연산자를 실행 전 검증에서 거절하는지 확인한다.
 func TestCalculatorRejectsInvalidArguments(t *testing.T) {
 	calculator := NewCalculator()
 	tests := []struct {
@@ -61,6 +63,7 @@ func TestCalculatorRejectsInvalidArguments(t *testing.T) {
 	}
 }
 
+// TestCalculatorReturnsExecutionErrorForDivisionByZero 는 0으로 나누기가 입력 검증이 아니라 실행 오류로 분류되는지 확인한다.
 func TestCalculatorReturnsExecutionErrorForDivisionByZero(t *testing.T) {
 	calculator := NewCalculator()
 	args := json.RawMessage(`{"left":9,"operator":"/","right":0}`)
@@ -75,6 +78,7 @@ func TestCalculatorReturnsExecutionErrorForDivisionByZero(t *testing.T) {
 	}
 }
 
+// TestCalculatorReturnsExecutionErrorWhenContextCanceled 은 취소된 ctx에서 계산을 진행하지 않고 취소 원인을 보존한 실행 오류를 반환하는지 확인한다.
 func TestCalculatorReturnsExecutionErrorWhenContextCanceled(t *testing.T) {
 	calculator := NewCalculator()
 	ctx, cancel := context.WithCancel(context.Background())
@@ -86,6 +90,7 @@ func TestCalculatorReturnsExecutionErrorWhenContextCanceled(t *testing.T) {
 	}
 }
 
+// TestCalculatorSchemaMatchesToolIdentity 는 Tool 이름과 schema의 이름·설명·InputSchema가 서로 어긋나지 않는지 확인한다.
 func TestCalculatorSchemaMatchesToolIdentity(t *testing.T) {
 	calculator := NewCalculator()
 	schema := calculator.Schema()

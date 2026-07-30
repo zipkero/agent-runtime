@@ -13,7 +13,9 @@ import (
 type MiddlewareStage string
 
 const (
-	MiddlewareStagePreModel  MiddlewareStage = "pre_model"
+	// MiddlewareStagePreModel 상수는 공급자 호출 전에 요청을 처리하는 경계다.
+	MiddlewareStagePreModel MiddlewareStage = "pre_model"
+	// MiddlewareStagePostModel 상수는 공급자 응답을 정규화한 뒤 처리하는 경계다.
 	MiddlewareStagePostModel MiddlewareStage = "post_model"
 )
 
@@ -21,9 +23,13 @@ const (
 type RunnerErrorKind string
 
 const (
-	RunnerErrorKindMiddleware         RunnerErrorKind = "middleware"
-	RunnerErrorKindStructuredOutput   RunnerErrorKind = "structured_output"
-	RunnerErrorKindExecutionLimit     RunnerErrorKind = "execution_limit"
+	// RunnerErrorKindMiddleware 상수는 middleware hook이 반환한 실패를 나타내며 Stage와 Middleware 이름을 함께 보존한다.
+	RunnerErrorKindMiddleware RunnerErrorKind = "middleware"
+	// RunnerErrorKindStructuredOutput 상수는 schema compile, JSON 해석, schema 검증 실패를 나타낸다.
+	RunnerErrorKindStructuredOutput RunnerErrorKind = "structured_output"
+	// RunnerErrorKindExecutionLimit 상수는 Tool 호출 수, result 크기, 실행 deadline 제한 초과를 나타낸다.
+	RunnerErrorKindExecutionLimit RunnerErrorKind = "execution_limit"
+	// RunnerErrorKindIncompleteResponse 상수는 완료 사유가 정상 완료도 Tool 호출도 아닌 응답을 나타낸다.
 	RunnerErrorKindIncompleteResponse RunnerErrorKind = "incomplete_response"
 )
 
@@ -31,9 +37,12 @@ const (
 type StructuredOutputOperation string
 
 const (
+	// StructuredOutputOperationSchemaCompile 상수는 Runner 생성 시 OutputSchema compile 단계의 실패를 식별한다.
 	StructuredOutputOperationSchemaCompile StructuredOutputOperation = "schema_compile"
-	StructuredOutputOperationJSONParse     StructuredOutputOperation = "json_parse"
-	StructuredOutputOperationValidation    StructuredOutputOperation = "validation"
+	// StructuredOutputOperationJSONParse 상수는 최종 답을 단일 JSON 문서로 해석하는 단계의 실패를 식별한다.
+	StructuredOutputOperationJSONParse StructuredOutputOperation = "json_parse"
+	// StructuredOutputOperationValidation 상수는 해석한 JSON을 schema로 검증하는 단계의 실패를 식별한다.
+	StructuredOutputOperationValidation StructuredOutputOperation = "validation"
 )
 
 // RunnerError 구조체는 Runner 고유 실패 분류와 원인을 함께 보존한다.
