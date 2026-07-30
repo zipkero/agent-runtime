@@ -204,13 +204,7 @@ func (a *Agent) Run(ctx context.Context, input string) AgentState {
 			Tools:    a.toolSchemas(),
 		})
 		if err != nil {
-			if limitErr := executionLimitFromContext(ctx); limitErr != nil {
-				state.stopExecutionLimit(limitErr)
-				return state
-			}
-			state.Status = StatusError
-			state.LastError = err
-			state.record(TraceActionMiddlewareError, err)
+			state.stopFailure(ctx, TraceActionMiddlewareError, err)
 			return state
 		}
 		state.record(TraceActionLLMRequest, nil)
@@ -223,25 +217,13 @@ func (a *Agent) Run(ctx context.Context, input string) AgentState {
 		providerResponse, err := a.client.Chat(callCtx, modelRequest)
 		cancel()
 		if err != nil {
-			if limitErr := executionLimitFromContext(ctx); limitErr != nil {
-				state.stopExecutionLimit(limitErr)
-				return state
-			}
-			state.Status = StatusError
-			state.LastError = err
-			state.record(TraceActionLLMError, err)
+			state.stopFailure(ctx, TraceActionLLMError, err)
 			return state
 		}
 
 		finalResponse, err := applyPostModelMiddleware(ctx, a.middleware, modelRequest, providerResponse)
 		if err != nil {
-			if limitErr := executionLimitFromContext(ctx); limitErr != nil {
-				state.stopExecutionLimit(limitErr)
-				return state
-			}
-			state.Status = StatusError
-			state.LastError = err
-			state.record(TraceActionMiddlewareError, err)
+			state.stopFailure(ctx, TraceActionMiddlewareError, err)
 			return state
 		}
 		if err := executionLimitFromContext(ctx); err != nil {
@@ -419,6 +401,18 @@ func (s *AgentState) record(action TraceAction, err error) {
 		Status: s.Status,
 		Error:  err,
 	})
+}
+
+// stopFailure 메서드는 실행 deadline이 지난 뒤 관찰된 실패를 공급자·middleware 오류가 아닌 제한 초과로 기록한다.
+// ctx는 run 전체 context여야 한다. 모델 호출용 파생 context를 넘기면 ModelTimeout 초과가 run deadline 초과로 잘못 분류된다.
+func (s *AgentState) stopFailure(ctx context.Context, action TraceAction, err error) {
+	if limitErr := executionLimitFromContext(ctx); limitErr != nil {
+		s.stopExecutionLimit(limitErr)
+		return
+	}
+	s.Status = StatusError
+	s.LastError = err
+	s.record(action, err)
 }
 
 func (s *AgentState) stopExecutionLimit(err error) {
