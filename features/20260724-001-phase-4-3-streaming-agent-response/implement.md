@@ -2,7 +2,7 @@
 
 ## 체크리스트
 
-- [ ] task-001: Provider-neutral stream 계약과 Claude adapter 구현
+- [x] task-001: Provider-neutral stream 계약과 Claude adapter 구현
   - 목적: 호출자가 Claude의 SSE 형식을 알지 않고도 model text를 생성 순서대로 받고, 완성된 응답이나 구분 가능한
     stream 오류를 확인할 수 있다.
   - 접근: 기존 `LLMClient`는 유지하고 `StreamingLLMClient`와 공통 stream event를 추가한다. Claude adapter는

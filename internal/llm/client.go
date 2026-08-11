@@ -3,6 +3,7 @@ package llm
 
 import (
 	"context"
+	"iter"
 
 	"github.com/zipkero/agent-runtime/internal/message"
 )
@@ -11,6 +12,33 @@ import (
 // Chat 구현은 req를 읽기 전용으로 사용하고 참조를 보관하지 않으며, 반환한 응답의 소유권은 호출자에게 이전한다.
 type LLMClient interface {
 	Chat(ctx context.Context, req ChatRequest) (ChatResponse, error)
+}
+
+// ChatStreamEventKind 타입은 StreamChat이 내보내는 stream event 종류를 구분한다.
+type ChatStreamEventKind string
+
+const (
+	// ChatStreamEventTextDelta 상수는 생성 중인 assistant text 조각을 나타낸다.
+	ChatStreamEventTextDelta ChatStreamEventKind = "text_delta"
+	// ChatStreamEventResponse 상수는 stream이 끝난 뒤 조립한 완성 응답을 나타낸다.
+	ChatStreamEventResponse ChatStreamEventKind = "response"
+)
+
+// ChatStreamEvent 구조체는 공급자 중립 stream 조각 하나를 나타낸다.
+// Kind가 ChatStreamEventTextDelta이면 TextDelta만 채워지고, ChatStreamEventResponse이면 Response만 채워진다.
+type ChatStreamEvent struct {
+	Kind      ChatStreamEventKind
+	TextDelta string
+	Response  *ChatResponse
+}
+
+// StreamingLLMClient 인터페이스는 LLMClient에 streaming 호출을 추가한다.
+// StreamChat이 반환하는 iterator는 0개 이상의 text delta 뒤에 완성된 response를 정확히 한 번 내보내고 끝난다.
+// 오류가 발생하면 오류 하나를 내보내고 response는 내보내지 않는다. Consumer가 순회를 중단하면 추가 event 없이
+// 내부 연결과 요청이 정리된다. req와 반환한 event·response의 소유권 규칙은 LLMClient.Chat과 동일하다.
+type StreamingLLMClient interface {
+	LLMClient
+	StreamChat(ctx context.Context, req ChatRequest) iter.Seq2[ChatStreamEvent, error]
 }
 
 // ChatRequest 구조체는 공급자 중립 단발 LLM 요청이다.

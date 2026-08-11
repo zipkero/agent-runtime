@@ -1,12 +1,14 @@
 package llm
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"iter"
 	"net"
 	"net/http"
 	"strings"
@@ -38,6 +40,7 @@ type claudeMessageRequest struct {
 	System    string                 `json:"system,omitempty"`
 	Messages  []claudeRequestMessage `json:"messages"`
 	Tools     []claudeTool           `json:"tools,omitempty"`
+	Stream    bool                   `json:"stream,omitempty"`
 }
 
 type claudeTool struct {
@@ -157,6 +160,335 @@ func (c *claudeClient) Chat(ctx context.Context, req ChatRequest) (ChatResponse,
 	}
 
 	return decodeClaudeResponse(decoded), nil
+}
+
+// StreamChat 메서드는 Claude Messages API의 SSE stream을 provider 중립 text delta와 완성 응답으로 변환한다.
+// HTTP status 오류는 body를 읽기 전에 기존 Chat과 같은 오류로 반환하고, 이후 SSE error event, decode 실패,
+// 잘못된 Tool JSON과 message_stop 없는 EOF는 provider 오류로 종료한다. Consumer가 순회를 중단하면 그 시점에서
+// 정리되고 추가 event를 만들지 않는다.
+func (c *claudeClient) StreamChat(ctx context.Context, req ChatRequest) iter.Seq2[ChatStreamEvent, error] {
+	return func(yield func(ChatStreamEvent, error) bool) {
+		body, err := c.buildRequest(req)
+		if err != nil {
+			yield(ChatStreamEvent{}, err)
+			return
+		}
+		body.Stream = true
+
+		payload, err := json.Marshal(body)
+		if err != nil {
+			yield(ChatStreamEvent{}, providerError(ProviderClaude, claudeProviderOperation, err))
+			return
+		}
+
+		httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, c.endpoint+claudeMessagesPath, bytes.NewReader(payload))
+		if err != nil {
+			yield(ChatStreamEvent{}, providerError(ProviderClaude, claudeProviderOperation, err))
+			return
+		}
+		httpReq.Header.Set("Content-Type", claudeRequestMediaType)
+		httpReq.Header.Set("Accept", "text/event-stream")
+		httpReq.Header.Set("x-api-key", c.apiKey)
+		httpReq.Header.Set("anthropic-version", claudeAPIVersion)
+
+		httpResp, err := c.httpClient.Do(httpReq)
+		if err != nil {
+			if isTimeoutError(ctx, err) {
+				yield(ChatStreamEvent{}, timeoutError(ProviderClaude, claudeProviderOperation, err))
+				return
+			}
+			yield(ChatStreamEvent{}, providerError(ProviderClaude, claudeProviderOperation, err))
+			return
+		}
+		defer httpResp.Body.Close()
+
+		if httpResp.StatusCode < http.StatusOK || httpResp.StatusCode >= http.StatusMultipleChoices {
+			yield(ChatStreamEvent{}, c.readHTTPError(httpResp))
+			return
+		}
+
+		acc := &claudeStreamAccumulator{}
+		reader := bufio.NewReader(httpResp.Body)
+		for {
+			data, readErr := readSSEEventData(reader)
+			if readErr != nil {
+				if isTimeoutError(ctx, readErr) {
+					yield(ChatStreamEvent{}, timeoutError(ProviderClaude, claudeProviderOperation, readErr))
+					return
+				}
+				yield(ChatStreamEvent{}, providerError(ProviderClaude, claudeProviderOperation, fmt.Errorf("stream ended before message_stop: %w", readErr)))
+				return
+			}
+
+			delta, resp, done, err := acc.handle(data)
+			if err != nil {
+				yield(ChatStreamEvent{}, providerError(ProviderClaude, claudeProviderOperation, err))
+				return
+			}
+			if delta != "" {
+				if !yield(ChatStreamEvent{Kind: ChatStreamEventTextDelta, TextDelta: delta}, nil) {
+					return
+				}
+			}
+			if done {
+				yield(ChatStreamEvent{Kind: ChatStreamEventResponse, Response: resp}, nil)
+				return
+			}
+		}
+	}
+}
+
+// readSSEEventData 함수는 SSE event 하나를 읽어 data 필드를 합친 문자열로 반환한다.
+// Multi-line data는 개행으로 이어 붙이고, event·id 같은 다른 필드와 comment(ping) 줄은 무시한다.
+func readSSEEventData(r *bufio.Reader) (string, error) {
+	var dataLines []string
+	for {
+		line, readErr := r.ReadString('\n')
+		trimmed := strings.TrimRight(line, "\r\n")
+		if trimmed != "" {
+			if strings.HasPrefix(trimmed, "data:") {
+				dataLines = append(dataLines, strings.TrimPrefix(strings.TrimPrefix(trimmed, "data:"), " "))
+			}
+			// event, id와 comment(:로 시작하는 ping) 줄은 data 조립에 쓰지 않는다.
+		} else if len(line) > 0 && readErr == nil {
+			// blank line은 event 경계다.
+			return strings.Join(dataLines, "\n"), nil
+		}
+		if readErr != nil {
+			return strings.Join(dataLines, "\n"), readErr
+		}
+	}
+}
+
+// claudeStreamEnvelope 구조체는 SSE data 필드에 담긴 Claude stream event의 공통 JSON 형태다.
+type claudeStreamEnvelope struct {
+	Type         string                      `json:"type"`
+	Index        int                         `json:"index"`
+	Message      *claudeStreamMessage        `json:"message,omitempty"`
+	ContentBlock *claudeResponseContentBlock `json:"content_block,omitempty"`
+	Delta        *claudeStreamDelta          `json:"delta,omitempty"`
+	Usage        *claudeUsage                `json:"usage,omitempty"`
+	Error        *claudeStreamError          `json:"error,omitempty"`
+}
+
+type claudeStreamMessage struct {
+	Model string      `json:"model"`
+	Usage claudeUsage `json:"usage"`
+}
+
+// claudeStreamDelta 구조체는 content_block_delta와 message_delta event의 delta 필드를 함께 담는다.
+type claudeStreamDelta struct {
+	Type        string `json:"type"`
+	Text        string `json:"text"`
+	PartialJSON string `json:"partial_json"`
+	StopReason  string `json:"stop_reason"`
+}
+
+type claudeStreamError struct {
+	Type    string `json:"type"`
+	Message string `json:"message"`
+}
+
+// claudeStreamBlockKind 타입은 stream content block이 text인지 tool_use인지 구분한다.
+type claudeStreamBlockKind int
+
+const (
+	claudeStreamBlockText claudeStreamBlockKind = iota
+	claudeStreamBlockToolUse
+)
+
+// claudeStreamBlock 구조체는 진행 중인 content block 하나의 조립 상태를 보관한다.
+// closed는 content_block_stop을 받았는지를 나타내며, message_stop 시점에 열린 block이 남아 있으면
+// 불완전 content block으로 취급해 성공 응답을 만들지 않는다.
+type claudeStreamBlock struct {
+	kind     claudeStreamBlockKind
+	id       string
+	name     string
+	closed   bool
+	text     strings.Builder
+	partial  strings.Builder
+	toolCall *message.ToolCall
+}
+
+// claudeStreamAccumulator 구조체는 SSE event를 순서대로 받아 완성된 ChatResponse로 조립한다.
+// Tool call은 content_block_stop에서 부분 JSON을 완성한 뒤에만 만들어지므로 실행 경계로 부분 값이 새지 않는다.
+type claudeStreamAccumulator struct {
+	model      string
+	blocks     map[int]*claudeStreamBlock
+	order      []int
+	stopReason string
+	inputTok   int
+	outputTok  int
+}
+
+// handle 메서드는 SSE event 하나의 JSON data를 반영하고, 새 text delta, message_stop에서 조립한 완성 응답과
+// 완료 여부를 반환한다. Ping과 알 수 없는 event type은 무시한다.
+func (a *claudeStreamAccumulator) handle(data string) (delta string, resp *ChatResponse, done bool, err error) {
+	if strings.TrimSpace(data) == "" {
+		return "", nil, false, nil
+	}
+
+	var env claudeStreamEnvelope
+	if err := json.Unmarshal([]byte(data), &env); err != nil {
+		return "", nil, false, fmt.Errorf("decode stream event: %w", err)
+	}
+
+	switch env.Type {
+	case "message_start":
+		if env.Message != nil {
+			a.model = env.Message.Model
+			a.inputTok = env.Message.Usage.InputTokens
+		}
+	case "content_block_start":
+		if env.ContentBlock == nil {
+			return "", nil, false, fmt.Errorf("content_block_start missing content_block at index %d", env.Index)
+		}
+		if err := a.startBlock(env.Index, *env.ContentBlock); err != nil {
+			return "", nil, false, err
+		}
+	case "content_block_delta":
+		if env.Delta == nil {
+			return "", nil, false, fmt.Errorf("content_block_delta missing delta at index %d", env.Index)
+		}
+		block, ok := a.blocks[env.Index]
+		if !ok {
+			return "", nil, false, fmt.Errorf("content_block_delta before content_block_start at index %d", env.Index)
+		}
+		switch env.Delta.Type {
+		case "text_delta":
+			if block.kind != claudeStreamBlockText {
+				return "", nil, false, fmt.Errorf("text_delta for non-text content block at index %d", env.Index)
+			}
+			block.text.WriteString(env.Delta.Text)
+			delta = env.Delta.Text
+		case "input_json_delta":
+			if block.kind != claudeStreamBlockToolUse {
+				return "", nil, false, fmt.Errorf("input_json_delta for non-tool_use content block at index %d", env.Index)
+			}
+			block.partial.WriteString(env.Delta.PartialJSON)
+		default:
+			// 문서화되지 않은 delta type은 무시한다.
+		}
+	case "content_block_stop":
+		if err := a.finishBlock(env.Index); err != nil {
+			return "", nil, false, err
+		}
+	case "message_delta":
+		if env.Delta != nil && env.Delta.StopReason != "" {
+			a.stopReason = env.Delta.StopReason
+		}
+		if env.Usage != nil {
+			a.outputTok = env.Usage.OutputTokens
+		}
+	case "message_stop":
+		if index, open := a.openBlockIndex(); open {
+			return "", nil, false, fmt.Errorf("message_stop before content_block_stop at index %d", index)
+		}
+		resp = a.buildResponse()
+		done = true
+	case "error":
+		msg := "provider stream error"
+		if env.Error != nil && env.Error.Message != "" {
+			msg = env.Error.Message
+		}
+		return "", nil, false, errors.New(msg)
+	default:
+		// ping과 알 수 없는 event type은 무시한다.
+	}
+
+	return delta, resp, done, nil
+}
+
+// startBlock 메서드는 새 content block을 등록한다. 이미 등록된 index(닫힌 block 포함)가 다시 오면 order의
+// index 유일성이 깨지고 그 block의 text·Tool JSON이 덮어써지므로, 등록하지 않고 잘못된 순서로 오류를 반환한다.
+func (a *claudeStreamAccumulator) startBlock(index int, cb claudeResponseContentBlock) error {
+	if _, exists := a.blocks[index]; exists {
+		return fmt.Errorf("duplicate content_block_start at index %d", index)
+	}
+
+	block := &claudeStreamBlock{id: cb.ID, name: cb.Name}
+	if cb.Type == "tool_use" {
+		block.kind = claudeStreamBlockToolUse
+	} else if cb.Text != "" {
+		block.text.WriteString(cb.Text)
+	}
+	if a.blocks == nil {
+		a.blocks = make(map[int]*claudeStreamBlock)
+	}
+	a.blocks[index] = block
+	a.order = append(a.order, index)
+	return nil
+}
+
+// openBlockIndex 메서드는 content_block_stop을 받지 못한 채 열려 있는 content block이 있는지 확인한다.
+// message_stop이 이런 block보다 먼저 오면 불완전 content block을 성공 응답으로 조립하지 않기 위해 쓰인다.
+func (a *claudeStreamAccumulator) openBlockIndex() (index int, open bool) {
+	for _, idx := range a.order {
+		if block := a.blocks[idx]; block != nil && !block.closed {
+			return idx, true
+		}
+	}
+	return 0, false
+}
+
+// finishBlock 메서드는 content block을 닫고, tool_use라면 모은 부분 JSON을 하나의 문서로 확정한다.
+// content_block_start 없이 도착한 index나 유효한 JSON을 이루지 못한 Tool call은 stream을 종료시킬 오류로 반환한다.
+func (a *claudeStreamAccumulator) finishBlock(index int) error {
+	block, ok := a.blocks[index]
+	if !ok {
+		return fmt.Errorf("content_block_stop before content_block_start at index %d", index)
+	}
+	block.closed = true
+	if block.kind != claudeStreamBlockToolUse {
+		return nil
+	}
+
+	raw := block.partial.String()
+	if strings.TrimSpace(raw) == "" {
+		raw = "{}"
+	}
+	if !json.Valid([]byte(raw)) {
+		return fmt.Errorf("invalid tool_use input json at content block %d", index)
+	}
+	block.toolCall = &message.ToolCall{
+		ID:        block.id,
+		Name:      block.name,
+		Arguments: json.RawMessage(raw),
+	}
+	return nil
+}
+
+// buildResponse 메서드는 지금까지 모은 content block과 완료 metadata를 non-streaming 응답과 같은 형태로 조립한다.
+func (a *claudeStreamAccumulator) buildResponse() *ChatResponse {
+	var text strings.Builder
+	var toolCalls []message.ToolCall
+	for _, index := range a.order {
+		block := a.blocks[index]
+		if block == nil {
+			continue
+		}
+		switch block.kind {
+		case claudeStreamBlockText:
+			text.WriteString(block.text.String())
+		case claudeStreamBlockToolUse:
+			if block.toolCall != nil {
+				toolCalls = append(toolCalls, *block.toolCall)
+			}
+		}
+	}
+
+	return &ChatResponse{
+		Provider:     ProviderClaude,
+		Model:        a.model,
+		Message:      message.Assistant(text.String(), toolCalls...),
+		FinishReason: normalizeClaudeFinishReason(a.stopReason),
+		StopReason:   a.stopReason,
+		Usage: Usage{
+			InputTokens:  a.inputTok,
+			OutputTokens: a.outputTok,
+			TotalTokens:  a.inputTok + a.outputTok,
+		},
+	}
 }
 
 // buildRequest 메서드는 Runtime 메시지를 Claude가 받는 system 필드와 대화 메시지 배열로 분리한다.
