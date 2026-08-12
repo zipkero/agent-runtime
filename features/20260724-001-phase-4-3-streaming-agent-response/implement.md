@@ -19,7 +19,7 @@
     ANALYSIS §2, ANALYSIS §3, ANALYSIS §5.1, ANALYSIS §5.2, ANALYSIS §5.4, ANALYSIS §5.11,
     ANALYSIS §5.13
 
-- [ ] task-002: Ollama streaming adapter 구현
+- [x] task-002: Ollama streaming adapter 구현
   - 목적: 호출자가 Ollama의 NDJSON 형식을 처리하지 않고 text와 완성된 Tool call을 공통 stream 계약으로 받아
     Agent 실행에 사용할 수 있다.
   - 접근: Ollama streaming 요청에 `stream: true`를 보내고 `json.Decoder`로 연속 chunk를 소비한다. 도착 순서대로
