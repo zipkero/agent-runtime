@@ -31,6 +31,8 @@ const (
 	RunnerErrorKindExecutionLimit RunnerErrorKind = "execution_limit"
 	// RunnerErrorKindIncompleteResponse 상수는 완료 사유가 정상 완료도 Tool 호출도 아닌 응답을 나타낸다.
 	RunnerErrorKindIncompleteResponse RunnerErrorKind = "incomplete_response"
+	// RunnerErrorKindUnsupportedStream 상수는 streaming을 지원하지 않는 LLMClient로 RunStream을 호출했음을 나타낸다.
+	RunnerErrorKindUnsupportedStream RunnerErrorKind = "unsupported_stream"
 )
 
 // StructuredOutputOperation 타입은 structured output 처리 중 실패한 단계를 식별한다.
@@ -76,6 +78,9 @@ func (e *RunnerError) Error() string {
 			e.FinishReason,
 			e.StopReason,
 		)
+	}
+	if e.Kind == RunnerErrorKindUnsupportedStream {
+		return fmt.Sprintf("agent runner %s: client does not implement llm.StreamingLLMClient", e.Kind)
 	}
 	return fmt.Sprintf("agent runner %s %s middleware %q: %v", e.Kind, e.Stage, e.Middleware, e.Err)
 }
@@ -196,4 +201,8 @@ func structuredOutputError(operation StructuredOutputOperation, err error) error
 		Operation: operation,
 		Err:       err,
 	}
+}
+
+func unsupportedStreamError() error {
+	return &RunnerError{Kind: RunnerErrorKindUnsupportedStream}
 }

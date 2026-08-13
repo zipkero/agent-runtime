@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"iter"
 	"time"
 
 	"github.com/zipkero/agent-runtime/internal/llm"
@@ -93,4 +94,57 @@ func (r *Runner) Run(ctx context.Context, input string) RunnerResult {
 	}
 	result.StructuredOutput = output
 	return result
+}
+
+// RunnerStreamEventKind 타입은 RunStream이 내보내는 event 종류를 구분한다.
+type RunnerStreamEventKind string
+
+const (
+	// RunnerStreamEventTextDelta 상수는 생성 중인 model text 조각을 나타낸다.
+	RunnerStreamEventTextDelta RunnerStreamEventKind = "text_delta"
+	// RunnerStreamEventFinal 상수는 Agent가 StatusFinal로 끝난 성공 결과를 나타낸다.
+	RunnerStreamEventFinal RunnerStreamEventKind = "final"
+	// RunnerStreamEventError 상수는 최종 오류 결과를 나타낸다.
+	RunnerStreamEventError RunnerStreamEventKind = "error"
+)
+
+// RunnerStreamEvent 구조체는 RunStream이 내보내는 event 하나를 나타낸다.
+// Kind가 RunnerStreamEventTextDelta이면 Step과 TextDelta만 채워지고, RunnerStreamEventFinal 또는
+// RunnerStreamEventError이면 Result만 채워진다.
+type RunnerStreamEvent struct {
+	Kind      RunnerStreamEventKind
+	Step      int
+	TextDelta string
+	Result    *RunnerResult
+}
+
+// RunStream 메서드는 사용자 입력 하나를 streaming Agent 반복 흐름으로 실행한다. Iterator는 생성 순서대로 0개
+// 이상의 text delta event를 내보낸 뒤 정확히 한 번의 final 또는 error event로 끝난다. Client가
+// llm.StreamingLLMClient를 구현하지 않으면 공급자 호출이나 Tool 실행 없이 error event 한 번으로 끝난다. Consumer가
+// 순회를 중단하면 그 시점 이후 producer는 provider 요청과 Tool 실행을 포함해 추가 event를 만들지 않는다.
+func (r *Runner) RunStream(ctx context.Context, input string) iter.Seq[RunnerStreamEvent] {
+	return func(yield func(RunnerStreamEvent) bool) {
+		streamingClient, ok := r.agent.client.(llm.StreamingLLMClient)
+		if !ok {
+			state := AgentState{Status: StatusError, LastError: unsupportedStreamError()}
+			yield(RunnerStreamEvent{Kind: RunnerStreamEventError, Result: &RunnerResult{State: state}})
+			return
+		}
+
+		onText := func(step int, textDelta string) bool {
+			return yield(RunnerStreamEvent{Kind: RunnerStreamEventTextDelta, Step: step, TextDelta: textDelta})
+		}
+
+		state, aborted := r.agent.runStream(ctx, input, streamingClient, onText)
+		if aborted {
+			return
+		}
+
+		result := RunnerResult{State: state}
+		if state.Status == StatusFinal {
+			yield(RunnerStreamEvent{Kind: RunnerStreamEventFinal, Result: &result})
+			return
+		}
+		yield(RunnerStreamEvent{Kind: RunnerStreamEventError, Result: &result})
+	}
 }

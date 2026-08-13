@@ -91,6 +91,59 @@ type modelCallOptions struct {
 	middleware []ModelMiddleware
 }
 
+// modelCaller 함수 타입은 한 번의 model 호출 방식을 공통 loop와 분리해 non-streaming과 streaming 경로가 같은
+// 상태 전이를 공유하게 한다. completed가 true이면 providerResponse가 유효한 완성 응답이다. completed가 false이고
+// err가 nil이면 onDelta가 false를 반환해 호출자가 소비를 중단했다는 뜻이고, completed가 false이고 err가 nil이
+// 아니면 공급자 호출 자체가 실패했다는 뜻이다. onDelta는 streaming 호출에서만 text delta마다 호출되며 반환값이
+// false이면 modelCaller는 추가 event 없이 즉시 중단해야 한다.
+type modelCaller func(
+	ctx context.Context,
+	req llm.ChatRequest,
+	onDelta func(llm.ChatStreamEvent) bool,
+) (providerResponse llm.ChatResponse, completed bool, err error)
+
+// textDeltaSink 함수 타입은 공통 loop가 현재 Step을 붙인 text delta를 상위 소비자에 전달하는 경계다.
+// 반환값이 false이면 상위 소비자가 이후 delta와 결과를 원하지 않는다는 뜻이며 loop는 즉시 중단해야 한다.
+type textDeltaSink func(step int, textDelta string) bool
+
+// chatModelCaller 함수는 기존 non-streaming LLMClient.Chat을 modelCaller 계약으로 감싼다. Text delta가 없으므로
+// onDelta는 호출하지 않는다.
+func chatModelCaller(client llm.LLMClient) modelCaller {
+	return func(ctx context.Context, req llm.ChatRequest, _ func(llm.ChatStreamEvent) bool) (llm.ChatResponse, bool, error) {
+		response, err := client.Chat(ctx, req)
+		if err != nil {
+			return llm.ChatResponse{}, false, err
+		}
+		return response, true, nil
+	}
+}
+
+// streamModelCaller 함수는 StreamingLLMClient.StreamChat iterator를 동기적으로 소비해 text delta마다 onDelta를
+// 호출하고, 완성된 응답을 modelCaller 계약으로 반환한다. Consumer 중단과 공급자 오류를 구분해 상위로 전달한다.
+func streamModelCaller(client llm.StreamingLLMClient) modelCaller {
+	return func(ctx context.Context, req llm.ChatRequest, onDelta func(llm.ChatStreamEvent) bool) (llm.ChatResponse, bool, error) {
+		var response llm.ChatResponse
+		completed := false
+		for event, err := range client.StreamChat(ctx, req) {
+			if err != nil {
+				return llm.ChatResponse{}, false, err
+			}
+			if event.Kind == llm.ChatStreamEventResponse {
+				response = *event.Response
+				completed = true
+				break
+			}
+			if onDelta != nil && !onDelta(event) {
+				return llm.ChatResponse{}, false, nil
+			}
+		}
+		if !completed {
+			return llm.ChatResponse{}, false, errors.New("agent stream ended without a completed response")
+		}
+		return response, true, nil
+	}
+}
+
 // Agent 구조체는 메시지 상태를 소유하며 LLM 판단을 진행하는 Runtime 실행 객체다.
 type Agent struct {
 	client             llm.LLMClient
@@ -179,6 +232,21 @@ func newAgent(opts Options, modelCall modelCallOptions) (*Agent, error) {
 // Run 메서드는 입력을 사용자 메시지로 추가하고 종료 조건에 도달할 때까지 LLM 판단과 Tool 실행을 반복한다.
 // 실행 오류와 제한 초과는 반환 오류 대신 AgentState의 Status와 LastError에 보존한다.
 func (a *Agent) Run(ctx context.Context, input string) AgentState {
+	state, _ := a.run(ctx, input, chatModelCaller(a.client), nil)
+	return state
+}
+
+// runStream 메서드는 Run과 같은 상태 전이를 streaming caller로 실행한다. onText는 현재 Step이 붙은 text delta를
+// 상위 소비자에 전달하며, 반환값이 false이면 소비자가 중단했다는 뜻이다. 두 번째 반환값이 true이면 onText가 소비
+// 중단을 요청해 완성된 결과 없이 반환했다는 뜻이며, 이때 AgentState는 상위에서 사용하지 않는다.
+func (a *Agent) runStream(ctx context.Context, input string, client llm.StreamingLLMClient, onText textDeltaSink) (AgentState, bool) {
+	return a.run(ctx, input, streamModelCaller(client), onText)
+}
+
+// run 메서드는 Run과 runStream이 공유하는 상태 머신이다. call은 실제 model 호출 방식을 주입하고, onText는 streaming
+// 호출에서 나온 text delta를 현재 Step과 함께 상위로 전달한다. 두 번째 반환값이 true이면 onText가 소비 중단을
+// 요청해 loop가 완성된 결과 없이 끝났다는 뜻이며, 이 경우 AgentState는 미완성이므로 호출자가 사용해서는 안 된다.
+func (a *Agent) run(ctx context.Context, input string, call modelCaller, onText textDeltaSink) (AgentState, bool) {
 	state := AgentState{
 		Status: StatusRunning,
 	}
@@ -189,12 +257,12 @@ func (a *Agent) Run(ctx context.Context, input string) AgentState {
 	for {
 		if err := executionLimitFromContext(ctx); err != nil {
 			state.stopExecutionLimit(err)
-			return state
+			return state, false
 		}
 		if state.Step >= a.maxSteps {
 			state.Status = StatusMaxSteps
 			state.record(TraceActionMaxSteps, nil)
-			return state
+			return state, false
 		}
 
 		state.Step++
@@ -205,7 +273,7 @@ func (a *Agent) Run(ctx context.Context, input string) AgentState {
 		})
 		if err != nil {
 			state.stopFailure(ctx, TraceActionMiddlewareError, err)
-			return state
+			return state, false
 		}
 		state.record(TraceActionLLMRequest, nil)
 
@@ -214,21 +282,31 @@ func (a *Agent) Run(ctx context.Context, input string) AgentState {
 		if a.modelTimeout > 0 {
 			callCtx, cancel = context.WithTimeout(ctx, a.modelTimeout)
 		}
-		providerResponse, err := a.client.Chat(callCtx, modelRequest)
+		step := state.Step
+		onDelta := func(event llm.ChatStreamEvent) bool {
+			if onText == nil || event.Kind != llm.ChatStreamEventTextDelta {
+				return true
+			}
+			return onText(step, event.TextDelta)
+		}
+		providerResponse, completed, err := call(callCtx, modelRequest, onDelta)
 		cancel()
-		if err != nil {
+		if !completed {
+			if err == nil {
+				return state, true
+			}
 			state.stopFailure(ctx, TraceActionLLMError, err)
-			return state
+			return state, false
 		}
 
 		finalResponse, err := applyPostModelMiddleware(ctx, a.middleware, modelRequest, providerResponse)
 		if err != nil {
 			state.stopFailure(ctx, TraceActionMiddlewareError, err)
-			return state
+			return state, false
 		}
 		if err := executionLimitFromContext(ctx); err != nil {
 			state.stopExecutionLimit(err)
-			return state
+			return state, false
 		}
 
 		state.Messages = append(state.Messages, finalResponse.Message)
@@ -237,36 +315,36 @@ func (a *Agent) Run(ctx context.Context, input string) AgentState {
 		finishReason := effectiveFinishReason(finalResponse.FinishReason)
 		if finishReason != llm.FinishReasonComplete && finishReason != llm.FinishReasonToolCall {
 			state.stopIncompleteResponse(incompleteResponseError(finishReason, finalResponse.StopReason))
-			return state
+			return state, false
 		}
 		if len(state.ToolCalls) == 0 {
 			state.Status = StatusFinal
 			state.FinalAnswer = finalResponse.Message.Text
 			state.record(TraceActionFinal, nil)
-			return state
+			return state, false
 		}
 
 		if !a.hasTools() {
 			state.Status = StatusNeedsAction
 			state.record(TraceActionNeedsAction, nil)
-			return state
+			return state, false
 		}
 
-		for _, call := range finalResponse.Message.ToolCalls {
+		for _, toolCall := range finalResponse.Message.ToolCalls {
 			if err := executionLimitFromContext(ctx); err != nil {
 				state.stopExecutionLimit(err)
-				return state
+				return state, false
 			}
 			toolCallCount++
 			if toolCallCount > a.maxToolCalls {
 				state.stopExecutionLimit(executionLimitError(limitMaxToolCalls, toolCallCount, a.maxToolCalls, nil))
-				return state
+				return state, false
 			}
 
-			toolMessage, err := a.executeToolCall(ctx, &state, call)
+			toolMessage, err := a.executeToolCall(ctx, &state, toolCall)
 			if err != nil {
 				state.stopExecutionLimit(err)
-				return state
+				return state, false
 			}
 			state.Messages = append(state.Messages, toolMessage)
 		}

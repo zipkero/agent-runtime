@@ -34,7 +34,7 @@
     ANALYSIS §1, ANALYSIS §2, ANALYSIS §3, ANALYSIS §5.2, ANALYSIS §5.4, ANALYSIS §5.6,
     ANALYSIS §5.12, ANALYSIS §5.13
 
-- [ ] task-003: Agent와 Runner의 공통 streaming 실행 경로 구현
+- [x] task-003: Agent와 Runner의 공통 streaming 실행 경로 구현
   - 목적: Programmatic 호출자가 모든 model step의 text delta를 순서대로 관찰하면서 기존 Tool loop, middleware,
     실행 제한과 Agent 종료 상태가 반영된 final 또는 error 결과를 정확히 한 번 받을 수 있다.
   - 접근: Agent 상태 머신을 공통 내부 loop로 추출하고 non-streaming caller와 streaming caller를 연결한다.
