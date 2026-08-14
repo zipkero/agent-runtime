@@ -14,7 +14,7 @@ structured output 검증, provider-neutral Runner와 CLI 실행 경로를 추가
 ## 문서
 
 - [spec.md](./spec.md)
-- [analysis.md](./analysis.md) (ANALYSIS 단계에서 생성)
+- [analyze.md](./analyze.md) (ANALYSIS 단계에서 생성)
 - [implement.md](./implement.md) (IMPLEMENT 단계에서 생성)
 
 ## 이력

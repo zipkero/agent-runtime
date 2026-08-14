@@ -13,7 +13,7 @@ Agent가 단발 LLM 호출이 아니라 메시지 상태를 유지하며 반복 
 
 ## 문서
 - [spec.md](./spec.md)
-- [analysis.md](./analysis.md) (ANALYSIS 단계에서 생성)
+- [analyze.md](./analyze.md) (ANALYSIS 단계에서 생성)
 - [implement.md](./implement.md) (IMPLEMENT 단계에서 생성)
 
 ## 이력

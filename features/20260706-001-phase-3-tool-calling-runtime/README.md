@@ -12,7 +12,7 @@ LLM이 요청한 tool call을 Runtime이 이름으로 찾아 검증하고 실행
 
 ## 문서
 - [spec.md](./spec.md)
-- [analysis.md](./analysis.md) (ANALYSIS 단계에서 생성)
+- [analyze.md](./analyze.md) (ANALYSIS 단계에서 생성)
 - [implement.md](./implement.md) (IMPLEMENT 단계에서 생성)
 
 ## 이력

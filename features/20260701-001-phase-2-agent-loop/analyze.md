@@ -19,7 +19,7 @@
   usage metadata를 포함한다.
 - 현재 `cmd/agent-runtime`은 사용자 prompt를 읽어 `message.User(prompt)` 하나로 단발 `LLMClient.Chat`을 호출한다.
   Phase 2 spec은 기존 CLI 실행 contract 변경을 제외 범위로 둔다.
-- `features/20260628-002-phase-1-llm-client/analysis.md`는 메시지 타입을 `internal/message`가 소유하고, provider별
+- `features/20260628-002-phase-1-llm-client/analyze.md`는 메시지 타입을 `internal/message`가 소유하고, provider별
   JSON 변환은 `internal/llm` adapter 경계에 둔다는 구조를 채택했다.
 - 프로젝트 안에서 별도 `AGENTS.md`와 `docs/languages.md`는 확인되지 않았다.
 
@@ -145,7 +145,7 @@ adapter나 provider 설정 검증에는 새 테스트 의존을 만들지 않는
 Agent API 완료 조건과 충돌하지 않는다. 이후 CLI를 Agent loop 기반으로 전환할 때는 `internal/agent` API를 조립 계층에
 연결하면 된다(SPEC §5.1, SPEC §5.8).
 
-문서 영향은 이 feature의 `analysis.md`와 `README.md` 상태 갱신에 제한된다. Phase 2 분석 단계에서는 `README.md`,
+문서 영향은 이 feature의 `analyze.md`와 `README.md` 상태 갱신에 제한된다. Phase 2 분석 단계에서는 `README.md`,
 `ROADMAP.md`, `.env.example` 같은 사용자 실행 문서를 바꾸지 않는다. CLI contract와 공개 환경변수 contract를 바꾸지
 않기 때문이다.
 

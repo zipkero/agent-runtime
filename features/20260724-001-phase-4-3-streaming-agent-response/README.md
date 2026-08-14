@@ -15,7 +15,7 @@ text를 생성되는 순서대로 전달하면서도 Tool loop, middleware, stru
 ## 문서
 
 - [spec.md](./spec.md)
-- [analysis.md](./analysis.md) (ANALYSIS 단계에서 생성)
+- [analyze.md](./analyze.md) (ANALYSIS 단계에서 생성)
 - [implement.md](./implement.md) (IMPLEMENT 단계에서 생성)
 
 ## 이력

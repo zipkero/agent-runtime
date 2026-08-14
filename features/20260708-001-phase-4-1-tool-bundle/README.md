@@ -12,7 +12,7 @@ Phase 4.1은 Single Agent가 실제 작업에 사용할 수 있는 Tool 묶음�
 
 ## 문서
 - [spec.md](./spec.md)
-- [analysis.md](./analysis.md) (ANALYSIS 단계에서 생성)
+- [analyze.md](./analyze.md) (ANALYSIS 단계에서 생성)
 - [implement.md](./implement.md) (IMPLEMENT 단계에서 생성)
 
 ## 이력

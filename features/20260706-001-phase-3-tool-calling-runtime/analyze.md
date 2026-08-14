@@ -174,7 +174,7 @@ tool call과 tool result message만 변환했으므로, Phase 3에서는 사용 
 spec 제외 범위이며, Tool timeout 기본값도 Agent 옵션 기본값으로 처리할 수 있다. 나중에 CLI가 Agent loop를 사용하게
 될 때 config/env로 노출할 수 있다.
 
-Feature 문서는 이후 `implement-init`에서 Task와 검증 조건을 만든다. `analysis.md`는 구현 순서를 고정하지 않고,
+Feature 문서는 이후 `implement-init`에서 Task와 검증 조건을 만든다. `analyze.md`는 구현 순서를 고정하지 않고,
 구조와 경계만 결정한다.
 
 ## 5. Decision Points
